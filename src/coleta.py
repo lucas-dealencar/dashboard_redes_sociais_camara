@@ -111,9 +111,9 @@ def _cliente():
     return gspread.service_account(filename=str(config.CAMINHO_CREDENCIAIS))
 
 
-def _abrir_aba(spreadsheet_id: str, aba: str):
+def _abrir_aba(spreadsheet_id: str, aba: str, variavel: str = "SPREADSHEET_ID"):
     if not spreadsheet_id:
-        raise ErroColeta("SPREADSHEET_ID não definido (variável de ambiente).")
+        raise ErroColeta(f"ID da planilha não definido (variável de ambiente {variavel}).")
     planilha = _cliente().open_by_key(spreadsheet_id)
     nomes = [w.title for w in planilha.worksheets()]
     if aba not in nomes:
@@ -228,5 +228,7 @@ def extrair_dados_sheets(do_cache: bool = False) -> pd.DataFrame:
 def extrair_dados_qualitativos() -> dict:
     """Anotações editoriais da planilha qualitativa. Levanta erro se indisponível;
     o flow captura e segue sem ela."""
-    ws = _abrir_aba(config.SPREADSHEET_ID_QUALITATIVO, config.ABA_ANOTACOES)
+    ws = _abrir_aba(
+        config.SPREADSHEET_ID_QUALITATIVO, config.ABA_ANOTACOES, "SPREADSHEET_ID_QUALITATIVO"
+    )
     return {"anotacoes": ws.get_all_records()}

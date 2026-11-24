@@ -1,10 +1,10 @@
 {
   "engajamento": {
     "definicao": "Curtidas/reações + comentários/respostas + compartilhamentos/republicações. Salvamentos e outros tipos ficam fora.",
-    "fonte": "Curtidas, Comentários, Compartilhar",
+    "fonte": "Mtrc - Curtidas, Mtrc - Comentários, Mtrc - Compartilhar",
     "unidade": "interações",
     "denominador": null,
-    "agregacao": "soma; NA somente se as três parcelas forem NA"
+    "agregacao": "soma; calculado só com as três parcelas presentes (engajamento_completo). Parcela ausente = dado incompleto -> NA (ex.: Stories não trazem curtidas). Salvos e cliques ficam fora."
   },
   "taxa_engajamento": {
     "definicao": "Engajamento ÷ denominador × 100.",
@@ -14,28 +14,28 @@
     "agregacao": "Σ numeradores ÷ Σ denominadores, apenas com bases compatíveis (mesmo tipo de denominador)"
   },
   "alcance": {
-    "definicao": "Pessoas/contas alcançadas pela publicação.",
+    "definicao": "Valor da coluna 'Mtrc - Alcance' por publicação. ATENÇÃO: o significado exato varia por rede na origem (em YouTube parece visualizações; em X, impressões). Validar com a equipe antes de comparar redes.",
     "fonte": "Mtrc - Alcance",
     "unidade": "contas",
     "denominador": null,
-    "agregacao": "soma por rede; somado entre redes não é audiência única; nunca somar com impressões/visualizações"
+    "agregacao": "soma por rede (Instagram inclui Stories); somado entre redes não é audiência única; nunca somar com impressões/visualizações"
   },
   "impressoes": {
-    "definicao": "Exibições da publicação (inclui repetidas).",
+    "definicao": "Exibições da publicação (inclui repetidas). Só YouTube/Shorts trazem a coluna; X/Threads/LinkedIn indisponíveis.",
     "fonte": "YT & Shorts - Impressões",
     "unidade": "exibições",
     "denominador": null,
     "agregacao": "soma por rede; nunca somar com alcance/visualizações"
   },
   "seguidores": {
-    "definicao": "Seguidores acumulados da conta no dia.",
+    "definicao": "Seguidores acumulados da conta no dia. INDISPONÍVEL: a planilha atual traz a coluna vazia.",
     "fonte": "Seguidores acumulado",
     "unidade": "vínculos",
     "denominador": null,
     "agregacao": "último valor do dia por rede; somado entre redes são vínculos, não pessoas"
   },
   "seguidores_novos": {
-    "definicao": "Saldo líquido de seguidores no dia.",
+    "definicao": "Saldo líquido de seguidores no dia. INDISPONÍVEL: a planilha atual traz a coluna vazia.",
     "fonte": "Seguidores Evolução Novos",
     "unidade": "vínculos",
     "denominador": null,
@@ -54,5 +54,68 @@
     "unidade": "%",
     "denominador": "seguidores no início do período",
     "agregacao": "não se agrega entre redes"
+  },
+  "salvos": {
+    "definicao": "Salvamentos da publicação (separados do engajamento básico).",
+    "fonte": "Instagram - Salvos",
+    "unidade": "salvamentos",
+    "denominador": null,
+    "agregacao": "soma por rede; só Instagram feed"
+  },
+  "cliques_link": {
+    "definicao": "Cliques no link da publicação.",
+    "fonte": "Twitter - Click no link",
+    "unidade": "cliques",
+    "denominador": null,
+    "agregacao": "soma por rede; só X e Threads trazem; não entra no engajamento básico"
+  },
+  "formato": {
+    "definicao": "Formato padronizado: Vídeo curto/Reels, Vídeo longo, Vídeo, Imagem, Carrossel, Texto, Link, Stories. 'Vídeo' = duração indisponível (não dá para separar curto de longo). Colaborações (' - Colab') marcadas em `colab`.",
+    "fonte": "Tipo de mídia + Rede Local Post + link",
+    "unidade": "categoria",
+    "denominador": null,
+    "agregacao": "contagem de publicações (n) por grupo"
+  },
+  "formato_nativo": {
+    "definicao": "Tipo de mídia original da planilha, sem o sufixo ' - Colab'.",
+    "fonte": "Tipo de mídia",
+    "unidade": "categoria",
+    "denominador": null,
+    "agregacao": "não se agrega"
+  },
+  "tema": {
+    "definicao": "Tema principal = tema da Prop 1 (senão da Prop 2), restrito à taxonomia em config/taxonomia_temas.json. Fora da lista = 'Sem tema'. Só publicações com proposição têm tema (~metade da base).",
+    "fonte": "Prop 1 - Tema / Prop 2 - Tema",
+    "unidade": "categoria",
+    "denominador": null,
+    "agregacao": "contagem de publicações (n) por grupo"
+  },
+  "tema_secundario": {
+    "definicao": "Tema da Prop 2 quando diferente do principal.",
+    "fonte": "Prop 2 - Tema",
+    "unidade": "categoria",
+    "denominador": null,
+    "agregacao": "não se agrega"
+  },
+  "perfil": {
+    "definicao": "Perfil (@) extraído do link (X, Threads, Facebook). Instagram e YouTube não trazem o perfil no link.",
+    "fonte": "Post - Link",
+    "unidade": "categoria",
+    "denominador": null,
+    "agregacao": "não se agrega"
+  },
+  "metrica_madura": {
+    "definicao": "Publicação com pelo menos 7 dias de idade na data da última linha da base. Posts mais novos têm métrica em formação e ficam fora das medianas do avaliado no benchmark.",
+    "fonte": "calculada",
+    "unidade": "booleano",
+    "denominador": null,
+    "agregacao": "não se agrega"
+  },
+  "taxa_consolidada": {
+    "definicao": "Σ engajamento ÷ Σ alcance × 100 do grupo (tema × formato × rede). Forma correta de agregar taxas.",
+    "fonte": "calculada",
+    "unidade": "%",
+    "denominador": "alcance",
+    "agregacao": "não se agrega (já é agregada)"
   }
 }

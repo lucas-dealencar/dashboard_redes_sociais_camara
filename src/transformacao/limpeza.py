@@ -12,6 +12,7 @@ import pandas as pd
 
 from config.colunas import (
     COLUNAS_NUMERICAS,
+    COLUNAS_OBRIGATORIAS,
     COLUNAS_PERCENTUAIS,
     COLUNAS_TEXTO,
     MAPA_COLUNAS,
@@ -29,6 +30,7 @@ _RE_EXTENSO = re.compile(r"^(\d{1,2})\s+de\s+([a-zçã]+)\s+de\s+(\d{4})", re.IG
 _RE_ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
 _RE_BR = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})")
 _RE_SERIAL = re.compile(r"^\d{5}(\.\d+)?$")
+_RE_ERRO_SHEETS = re.compile(r"^#(REF!|N/A|VALUE!|NAME\?|DIV/0!|NUM!|NULL!|ERROR!)", re.IGNORECASE)
 _EPOCA_SHEETS = datetime(1899, 12, 30)
 
 
@@ -134,9 +136,23 @@ def _metricas_por_rede(df: pd.DataFrame) -> dict[str, list[str]]:
     }
 
 
+def _descartar_erros_planilha(bruto: pd.DataFrame) -> tuple[pd.DataFrame, list[int]]:
+    """Remove linhas com erro de fórmula do Sheets (`#REF!`, `#N/A`...) em coluna obrigatória:
+    não são publicações. Devolve o bruto limpo e as linhas da planilha descartadas."""
+    erro = pd.Series(False, index=bruto.index)
+    for col in COLUNAS_OBRIGATORIAS:
+        erro |= pd.Series(
+            [isinstance(v, str) and bool(_RE_ERRO_SHEETS.match(v.strip())) for v in bruto[col]],
+            index=bruto.index, dtype=bool,
+        )
+    linhas = [int(n) for n in bruto.loc[erro, "linha_planilha"]]
+    return bruto[~erro].reset_index(drop=True), linhas
+
+
 def limpar(bruto: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """Bruto (nomes da origem) -> DataFrame tipado com nomes internos + relatório."""
     relatorio: dict = {"linhas_entrada": len(bruto), "falhas_conversao": {}}
+    bruto, relatorio["linhas_erro_planilha"] = _descartar_erros_planilha(bruto)
     renomear = {o: i for o, i in MAPA_COLUNAS.items() if o in bruto.columns}
     df = bruto[["linha_planilha", *renomear]].rename(columns=renomear).copy()
     relatorio["colunas_ausentes"] = [i for i in MAPA_COLUNAS.values() if i not in df.columns]

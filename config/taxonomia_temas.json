@@ -1,5 +1,20 @@
 {
-  "versao": 1,
-  "descricao": "Aliases opcionais: texto do tema na planilha -> tema canônico. Vazio = usa o tema como vem.",
+  "versao": 2,
+  "descricao": "Taxonomia editável. `temas`: lista canônica (comparação sem maiúsculas/acentos de caixa). `aliases`: texto da planilha -> tema canônico. Valor fora da lista vira 'Sem tema' e é contado no relatório (temas_invalidos).",
+  "temas": [
+    "Agropecuária",
+    "Cidades e transportes",
+    "Ciência, tecnologia e comunicações",
+    "Consumidor",
+    "Direitos humanos",
+    "Economia",
+    "Educação, cultura e esportes",
+    "Meio ambiente e energia",
+    "Política e administração pública",
+    "Relações exteriores",
+    "Saúde",
+    "Segurança",
+    "Trabalho, previdência e assistência"
+  ],
   "aliases": {}
 }

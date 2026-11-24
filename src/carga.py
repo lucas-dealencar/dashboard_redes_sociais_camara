@@ -16,9 +16,11 @@ from src import config
 
 _PADRAO_PARTICAO = re.compile(r"^\d{4}-\d{2}\.json$")
 COLUNAS_PUBLICACAO = [
-    "data", "rede", "link", "formato", "tema", "tipo_classificacao", "projeto",
+    "data", "rede", "perfil", "link", "formato", "formato_nativo", "colab", "ao_vivo",
+    "tema", "tema_secundario", "tipo_classificacao", "projeto",
     "alcance", "impressoes", "visualizacoes", "curtidas", "comentarios", "compartilhamentos",
-    "engajamento", "taxa_engajamento", "denominador_tipo", "descricao",
+    "salvos", "cliques_link", "engajamento", "engajamento_completo", "taxa_engajamento",
+    "denominador_tipo", "descricao",
 ]
 
 
@@ -58,6 +60,7 @@ def _tabela(df: pd.DataFrame) -> dict:
 
 def _gravar_particoes(base: pd.DataFrame) -> list[dict]:
     posts = base[base["eh_post"]].copy()
+    posts["descricao"] = posts["descricao"].str.slice(0, config.DESCRICAO_MAX_CARACTERES)
     fim = posts["data"].max()
     corte = (fim.to_period("M") - (config.JANELA_MESES_POSTS - 1)).to_timestamp()
     posts = posts[posts["data"] >= corte]
@@ -126,6 +129,7 @@ def salvar_dados_json(tabelas: dict) -> dict:
         "arquivos": {n: n for n in tamanhos},
         "particoes": particoes,
         "qualitativo_disponivel": bool(qual),
+        "limitacoes": tabelas.get("limitacoes", []),
     }
     tamanhos["manifest.json"] = _gravar_json(pasta / "manifest.json", manifest)
     _tabela_tamanhos(tamanhos, particoes)

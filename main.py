@@ -10,6 +10,7 @@ import argparse
 from prefect import flow
 from prefect.schedules import Cron
 
+from src import config
 from src.carga import salvar_dados_json
 from src.coleta import extrair_dados_qualitativos, extrair_dados_sheets
 from src.publicacao import publicar_dados_git
@@ -21,11 +22,14 @@ CRON_DIARIO = Cron("30 11 * * *", timezone="America/Sao_Paulo")
 @flow(name="Atualizar Dashboard Câmara nas Redes", log_prints=True)
 def atualizar_dashboard(publicar: bool = True, do_cache: bool = False) -> dict:
     bruto = extrair_dados_sheets(do_cache=do_cache)
-    try:  # planilha qualitativa é opcional: se falhar, segue sem ela
-        qualitativo = None if do_cache else extrair_dados_qualitativos()
-    except Exception as erro:
-        print(f"Aviso: análise qualitativa indisponível ({erro}); seguindo sem ela.")
-        qualitativo = None
+    qualitativo = None
+    if do_cache or not config.SPREADSHEET_ID_QUALITATIVO:
+        print("Planilha qualitativa não configurada; seguindo sem anotações.")
+    else:
+        try:  # planilha qualitativa é opcional: se falhar, segue sem ela
+            qualitativo = extrair_dados_qualitativos()
+        except Exception as erro:
+            print(f"Aviso: análise qualitativa indisponível ({erro}); seguindo sem ela.")
     tabelas = transformar_dados(bruto, qualitativo)
     manifest = salvar_dados_json(tabelas)
     if publicar:

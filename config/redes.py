@@ -35,3 +35,19 @@ KPI_PRINCIPAL = {
     "Bluesky": "engajamento",
     "LinkedIn": "impressoes",
 }
+
+# Redes do escopo da proposta (seção 2). As que não aparecem na planilha são reportadas
+# como "sem dados" em vez de sumirem em silêncio.
+REDES_ESCOPO = ["Instagram", "Facebook", "TikTok", "X", "Threads", "Bluesky", "LinkedIn"]
+
+# Quando o KPI proposto não existe na planilha para a rede, usa-se o primeiro substituto com
+# dado, SEMPRE sinalizado como substituto (`kpi_por_rede` no benchmark.json).
+# Padrão para redes sem entrada: alcance -> impressões -> visualizações -> engajamento.
+KPI_SUBSTITUTOS = {
+    "X": ["alcance"],          # impressões não vêm da planilha; "Mtrc - Alcance" é o mais próximo (validar)
+    "Threads": ["alcance"],    # visualizações não vêm da planilha (validar)
+    "TikTok": ["alcance"],
+    "LinkedIn": ["alcance"],
+    "Bluesky": [],
+}
+KPI_SUBSTITUTO_PADRAO = ["alcance", "impressoes", "visualizacoes", "engajamento"]

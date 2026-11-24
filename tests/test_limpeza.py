@@ -67,3 +67,17 @@ def test_deduplica_por_link_mantendo_ultimo(bruto):
     x = df[df["link"] == "https://x.com/1"]
     assert len(x) == 1 and x["curtidas"].iloc[0] == 20
     assert df["link"].dropna().is_unique
+
+
+def test_descarta_linha_com_erro_de_formula_e_mantem_as_demais(bruto):
+    erro = {c: None for c in bruto.columns}
+    erro.update({"linha_planilha": 99, "Post - Link": "#REF! (Array result was not expanded)"})
+    df, rel = limpar(pd.concat([bruto, pd.DataFrame([erro])], ignore_index=True))
+    assert rel["linhas_erro_planilha"] == [99]
+    assert len(df) == len(bruto)
+
+
+def test_hashtag_comum_nao_e_erro_de_formula(bruto):
+    bruto.loc[0, "Post - Link"] = "#referendo"
+    df, rel = limpar(bruto)
+    assert rel["linhas_erro_planilha"] == [] and len(df) == len(bruto)

@@ -44,3 +44,9 @@ TAMANHOS_ALVO = {
     "dicionario_metricas.json": 50 * 1024,
 }
 TAMANHO_ALVO_PARTICAO = 1024 * 1024
+
+# --- Transformação (regras de negócio ajustáveis) --- #
+JANELAS_BENCHMARK_ALTERNATIVAS = (30, 60, 180)  # além de JANELA_BENCHMARK_DIAS (proposta: janela ajustável)
+IDADE_MINIMA_METRICA_DIAS = 7  # post mais novo que isso tem métrica ainda em formação (fora do benchmark)
+LIMIAR_COBERTURA_DISPONIVEL = 0.95  # ≥95% das linhas com dado = "disponível"; entre 0 e isso = "parcial"
+DESCRICAO_MAX_CARACTERES = 140  # mantém as partições mensais < 1 MB
