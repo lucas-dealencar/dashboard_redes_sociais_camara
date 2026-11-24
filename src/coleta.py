@@ -5,6 +5,7 @@ isso é da limpeza. Só se uniformizam tipos por coluna para poder gravar em Par
 """
 import hashlib
 import json
+import random
 import time
 from datetime import datetime
 
@@ -99,6 +100,50 @@ def _montar_dataframe(dados: dict[str, list], linha_inicial: int) -> pd.DataFram
     return df
 
 
+# --------------------------- tolerância a falhas do Google --------------------------- #
+# Erros de servidor/cota/rede são passageiros: repete com espera crescente (~5 min no total)
+# antes de desistir. Erros de configuração (403, 404, cabeçalho, credencial) NÃO são repetidos.
+ESPERAS_S = (5, 10, 20, 40, 60, 60, 60, 60)  # 9 tentativas
+CODIGOS_TRANSITORIOS = {408, 429, 500, 502, 503, 504}
+TIMEOUT_REQUISICAO_S = 120
+
+
+def _eh_transitorio(erro: BaseException) -> bool:
+    """500/502/503/504 (Google), 429 (cota por minuto), 408 e quedas de rede/timeout."""
+    import requests
+    from gspread.exceptions import APIError
+
+    if isinstance(erro, APIError):
+        return getattr(erro, "code", None) in CODIGOS_TRANSITORIOS
+    return isinstance(
+        erro,
+        (requests.exceptions.ConnectionError, requests.exceptions.Timeout, ConnectionError, TimeoutError),
+    )
+
+
+def _com_retry(funcao, descricao: str, esperas=None, dormir=time.sleep):
+    """Executa `funcao()`; em falha passageira espera e tenta de novo. Outros erros sobem na hora."""
+    esperas = ESPERAS_S if esperas is None else esperas
+    for tentativa in range(len(esperas) + 1):
+        try:
+            return funcao()
+        except Exception as erro:
+            if not _eh_transitorio(erro) or tentativa == len(esperas):
+                raise
+            espera = esperas[tentativa] * random.uniform(0.8, 1.2)
+            print(
+                f"Aviso: falha passageira do Google em '{descricao}' ({type(erro).__name__}: "
+                f"{str(erro)[:80]}); tentativa {tentativa + 1}/{len(esperas) + 1}, nova em {espera:.0f}s."
+            )
+            dormir(espera)
+
+
+def _retentar_se_transitorio(task, task_run, state) -> bool:
+    """Condição de retry do Prefect: só repete a coleta inteira se a falha final foi passageira."""
+    erro = state.result(raise_on_failure=False)
+    return isinstance(erro, BaseException) and _eh_transitorio(erro)
+
+
 # ------------------------------ acesso ao Google ------------------------------ #
 def _cliente():
     import gspread
@@ -108,20 +153,24 @@ def _cliente():
             f"Credenciais não encontradas em {config.CAMINHO_CREDENCIAIS}. "
             "Coloque o JSON da conta de serviço nesse caminho (arquivo fora do git)."
         )
-    return gspread.service_account(filename=str(config.CAMINHO_CREDENCIAIS))
+    cliente = gspread.service_account(filename=str(config.CAMINHO_CREDENCIAIS))
+    cliente.set_timeout(TIMEOUT_REQUISICAO_S)  # sem isso uma conexão pendurada trava o flow
+    return cliente
 
 
 def _abrir_aba(spreadsheet_id: str, aba: str, variavel: str = "SPREADSHEET_ID"):
     if not spreadsheet_id:
         raise ErroColeta(f"ID da planilha não definido (variável de ambiente {variavel}).")
-    planilha = _cliente().open_by_key(spreadsheet_id)
-    nomes = [w.title for w in planilha.worksheets()]
+    cliente = _cliente()
+    planilha = _com_retry(lambda: cliente.open_by_key(spreadsheet_id), "abrir planilha")
+    abas = _com_retry(planilha.worksheets, "listar abas")
+    nomes = [w.title for w in abas]
     if aba not in nomes:
         raise ErroColeta(f"Aba '{aba}' não encontrada. Abas existentes: {nomes}.")
-    return planilha.worksheet(aba)
+    return abas[nomes.index(aba)]
 
 
-@task(name="Ler bloco da planilha", retries=3, retry_delay_seconds=[5, 20, 60], log_prints=True)
+@task(name="Ler bloco da planilha", log_prints=True)
 def _ler_bloco(ws, posicoes: dict[str, int], inicio: int, fim: int) -> dict[str, list]:
     """Lê as colunas necessárias das linhas [inicio, fim] (1-based) em UMA requisição."""
     from gspread.utils import ValueRenderOption
@@ -130,7 +179,10 @@ def _ler_bloco(ws, posicoes: dict[str, int], inicio: int, fim: int) -> dict[str,
     faixas = [
         f"{_letra_coluna(posicoes[n])}{inicio}:{_letra_coluna(posicoes[n])}{fim}" for n in nomes
     ]
-    resultado = ws.batch_get(faixas, value_render_option=ValueRenderOption.unformatted)
+    resultado = _com_retry(
+        lambda: ws.batch_get(faixas, value_render_option=ValueRenderOption.unformatted),
+        f"ler linhas {inicio}–{fim}",
+    )
     tamanho = fim - inicio + 1
     dados: dict[str, list] = {}
     for nome, faixa in zip(nomes, resultado):
@@ -143,11 +195,14 @@ def _bloco_vazio(dados: dict[str, list]) -> bool:
     return all(_vazio(v) for col in dados.values() for v in col)
 
 
-@task(name="Coletar aba Consolidado", log_prints=True)
+@task(
+    name="Coletar aba Consolidado", log_prints=True,
+    retries=2, retry_delay_seconds=120, retry_condition_fn=_retentar_se_transitorio,
+)
 def _coletar_sheets() -> pd.DataFrame:
     t0 = time.time()
     ws = _abrir_aba(config.SPREADSHEET_ID, config.ABA_CONSOLIDADO)
-    cabecalho = [str(c).strip() for c in ws.row_values(1)]
+    cabecalho = [str(c).strip() for c in _com_retry(lambda: ws.row_values(1), "ler cabeçalho")]
     posicoes = _resolver_colunas(cabecalho)
 
     hash_atual = _hash_cabecalho(cabecalho)
