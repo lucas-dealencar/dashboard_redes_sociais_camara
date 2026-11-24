@@ -1,0 +1,5 @@
+{
+  "versao": 1,
+  "descricao": "Aliases opcionais: texto do tema na planilha -> tema canônico. Vazio = usa o tema como vem.",
+  "aliases": {}
+}
