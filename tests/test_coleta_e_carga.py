@@ -7,10 +7,6 @@ from src import carga, coleta, config
 from src.transformacao import transformar_dados
 
 
-def test_letra_coluna():
-    assert [coleta._letra_coluna(i) for i in (0, 25, 26, 27, 701, 702)] == ["A", "Z", "AA", "AB", "ZZ", "AAA"]
-
-
 def test_cabecalho_sem_obrigatoria_falha_claro():
     with pytest.raises(coleta.ErroColeta, match="obrigatórias"):
         coleta._resolver_colunas(["01 - Data", "Mtrc - Curtidas"])

@@ -8,7 +8,7 @@ Escopo funcional: ver a proposta "Dashboard integrado de redes sociais" (nov/202
 
 `main.py` (flow Prefect `atualizar_dashboard`) encadeia:
 
-1. `src/coleta.py`: lê a aba `Consolidado` por blocos de linhas (`values_batch_get`, `UNFORMATTED_VALUE`), com retries por bloco. Grava o bruto em `cache/bruto.parquet`.
+1. `src/coleta.py`: baixa a aba `Consolidado` como CSV numa só requisição (`/export?format=csv&gid=`, `GID_CONSOLIDADO`), com retries. Foto única: edições durante a coleta não deslocam linhas. Grava o bruto em `cache/bruto.parquet`.
 2. `src/transformacao/`: limpa e tipa (datas por extenso, percentuais em texto, milhares com ponto), valida, deduplica por `Post - Link` e produz tabelas analíticas.
 3. `src/carga.py`: agrega e grava os JSONs em `docs/dados/` (atômico, `.tmp` + `replace`).
 4. `src/publicacao.py`: commit só de `docs/dados/`, `pull --rebase --autostash` e `push`.
@@ -28,7 +28,7 @@ Formato **longo**: uma linha por post, com a rede em `02 - Rede` (ex.: `Rede X`)
 
 Armadilhas já observadas (validar sempre com amostra real):
 
-- Data vem por extenso em pt-BR (`11 de dezembro de 2024`) mesmo com `UNFORMATTED_VALUE`: converter com mapa de meses próprio, sem depender de locale.
+- Data vem por extenso em pt-BR (`11 de dezembro de 2024`), pois o CSV traz o texto formatado: converter com mapa de meses próprio, sem depender de locale.
 - Percentuais podem vir como texto (`14%`); números de sigla com separador de milhar (`2.253`). Use `_para_float` / `_para_percentual`.
 - **Zero ≠ indisponível ≠ incompleto**: célula vazia vira `NA`, nunca `0`. Cada rede só tem parte das métricas.
 - Colunas com typo na origem (`Engamento`, `Storires`): mapeie por nome exato em `config/colunas.py`; não "corrija" na leitura.
@@ -66,7 +66,7 @@ Janela histórica padrão: 12 meses de posts (`JANELA_MESES_POSTS`); `resumo_dia
 ## Cache e leitura incremental
 
 - `cache/` (gitignored) guarda `bruto.parquet` e `estado.json` (última data lida, hash do cabeçalho). Serve para iterar na transformação sem reler a API.
-- Padrão em produção: **leitura completa em blocos** (80 mil linhas leem em ~10–60 s; o agendamento diário absorve isso). Leitura incremental (só linhas novas) é otimização futura: só ative se a coleta passar de ~3 min.
+- Padrão em produção: **download completo do CSV** (80 mil linhas, ~46 MB, ~10 s). Leitura incremental (só linhas novas) é otimização futura: só ative se a coleta passar de ~3 min.
 - Mudou o cabeçalho da planilha? A coleta deve falhar com mensagem clara (`ABAS_ESPERADAS` / `COLUNAS_ESPERADAS`), nunca seguir com colunas deslocadas.
 
 ## Comandos

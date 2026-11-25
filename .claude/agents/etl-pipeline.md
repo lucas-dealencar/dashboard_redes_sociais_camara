@@ -13,8 +13,8 @@ Você é o responsável único pelo **ETL**. Leia o `CLAUDE.md` do projeto antes
 Cada etapa é uma função/`@task` com `name` em português; o encadeamento e os retries globais são do orquestrador.
 
 ## 1. Coleta (`coleta.py`, `scripts/benchmark_coleta.py`)
-- Aba `Consolidado` via `values_batch_get`, blocos de 15–20 mil linhas, `UNFORMATTED_VALUE`, só as colunas necessárias. Nunca `get_all_records`.
-- Retries com backoff por bloco; respeite ~60 leituras/min.
+- Aba `Consolidado` via exportação CSV numa só requisição (foto consistente), guardando só as colunas do mapa. Não voltar à leitura por blocos.
+- Retries com backoff no download, só para falhas passageiras (429, 5xx, rede).
 - Grave `cache/bruto.parquet` e `cache/estado.json` (data, nº de linhas, hash do cabeçalho); suporte `--do-cache`.
 - Cabeçalho diferente do esperado: falhe com mensagem clara, nunca siga deslocado.
 - A planilha é somente leitura. A qualitativa é opcional (falha não derruba o flow).

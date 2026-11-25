@@ -1,9 +1,13 @@
-"""Coleta: lê a aba `Consolidado` do Google Sheets por blocos de linhas e grava o bruto em cache.
+"""Coleta: baixa a aba `Consolidado` como CSV (uma requisição) e grava o bruto em cache.
 
+Uma única requisição = uma foto consistente da aba, mesmo que alguém a edite durante a coleta.
+O CSV traz o texto FORMATADO (data por extenso, `2,48%`, `235.246`); a limpeza entende isso.
 A planilha é SOMENTE LEITURA. Aqui não se converte tipo de negócio (datas, %, milhares):
 isso é da limpeza. Só se uniformizam tipos por coluna para poder gravar em Parquet.
 """
+import csv
 import hashlib
+import io
 import json
 import random
 import time
@@ -12,7 +16,7 @@ from datetime import datetime
 import pandas as pd
 from prefect import task
 
-from config.colunas import ABAS_ESPERADAS, COLUNAS_OBRIGATORIAS, MAPA_COLUNAS
+from config.colunas import COLUNAS_OBRIGATORIAS, MAPA_COLUNAS
 from src import config
 
 
@@ -21,16 +25,6 @@ class ErroColeta(RuntimeError):
 
 
 # ----------------------------- funções puras ----------------------------- #
-def _letra_coluna(indice: int) -> str:
-    """Índice 0-based -> letra A1 (0 -> A, 26 -> AA)."""
-    letras = ""
-    n = indice + 1
-    while n:
-        n, resto = divmod(n - 1, 26)
-        letras = chr(65 + resto) + letras
-    return letras
-
-
 def _hash_cabecalho(cabecalho: list[str]) -> str:
     return hashlib.sha256("\x1f".join(cabecalho).encode("utf-8")).hexdigest()[:16]
 
@@ -93,11 +87,31 @@ def _uniformizar_tipos(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(saida, index=df.index)
 
 
-def _montar_dataframe(dados: dict[str, list], linha_inicial: int) -> pd.DataFrame:
-    """`dados`: nome na origem -> valores (mesmo comprimento). Adiciona `linha_planilha`."""
-    df = pd.DataFrame(dados)
-    df.insert(0, "linha_planilha", range(linha_inicial, linha_inicial + len(df)))
-    return df
+def _ler_csv(conteudo: bytes) -> tuple[list[str], pd.DataFrame]:
+    """CSV exportado -> (cabeçalho, DataFrame só com as colunas do mapa, tudo texto).
+
+    `linha_planilha` é a linha real na aba: um registro do CSV = uma linha (quebras de linha
+    dentro da descrição vêm entre aspas). Aqui "NA", "null" etc. continuam texto: só o vazio é nulo.
+    """
+    leitor = csv.reader(io.StringIO(conteudo.decode("utf-8-sig"), newline=""), strict=True)
+    try:
+        linhas = list(leitor)
+    except csv.Error as erro:  # ex.: arquivo cortado no meio de um campo entre aspas
+        raise ErroColeta(f"CSV exportado inválido ou incompleto: {erro}.") from erro
+    if not linhas:
+        raise ErroColeta("O CSV exportado veio vazio.")
+    cabecalho = [c.strip() for c in linhas[0]]
+    posicoes = _resolver_colunas(cabecalho)
+    n_colunas = len(cabecalho)
+    for numero, linha in enumerate(linhas[1:], start=2):
+        if len(linha) != n_colunas:
+            raise ErroColeta(
+                f"CSV exportado incompleto: a linha {numero} tem {len(linha)} colunas, "
+                f"esperadas {n_colunas}."
+            )
+    df = pd.DataFrame({nome: [linha[i] for linha in linhas[1:]] for nome, i in posicoes.items()})
+    df.insert(0, "linha_planilha", range(2, 2 + len(df)))
+    return cabecalho, df
 
 
 # --------------------------- tolerância a falhas do Google --------------------------- #
@@ -111,13 +125,20 @@ TIMEOUT_REQUISICAO_S = 120
 def _eh_transitorio(erro: BaseException) -> bool:
     """500/502/503/504 (Google), 429 (cota por minuto), 408 e quedas de rede/timeout."""
     import requests
+    from google.auth.exceptions import TransportError
     from gspread.exceptions import APIError
 
     if isinstance(erro, APIError):
         return getattr(erro, "code", None) in CODIGOS_TRANSITORIOS
+    if isinstance(erro, requests.exceptions.HTTPError):
+        return erro.response is not None and erro.response.status_code in CODIGOS_TRANSITORIOS
     return isinstance(
         erro,
-        (requests.exceptions.ConnectionError, requests.exceptions.Timeout, ConnectionError, TimeoutError),
+        (
+            requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+            requests.exceptions.ChunkedEncodingError,  # download interrompido no meio
+            TransportError, ConnectionError, TimeoutError,
+        ),
     )
 
 
@@ -145,14 +166,18 @@ def _retentar_se_transitorio(task, task_run, state) -> bool:
 
 
 # ------------------------------ acesso ao Google ------------------------------ #
-def _cliente():
-    import gspread
-
+def _exigir_credenciais() -> None:
     if not config.CAMINHO_CREDENCIAIS.exists():
         raise ErroColeta(
             f"Credenciais não encontradas em {config.CAMINHO_CREDENCIAIS}. "
             "Coloque o JSON da conta de serviço nesse caminho (arquivo fora do git)."
         )
+
+
+def _cliente():
+    import gspread
+
+    _exigir_credenciais()
     cliente = gspread.service_account(filename=str(config.CAMINHO_CREDENCIAIS))
     cliente.set_timeout(TIMEOUT_REQUISICAO_S)  # sem isso uma conexão pendurada trava o flow
     return cliente
@@ -170,29 +195,37 @@ def _abrir_aba(spreadsheet_id: str, aba: str, variavel: str = "SPREADSHEET_ID"):
     return abas[nomes.index(aba)]
 
 
-@task(name="Ler bloco da planilha", log_prints=True)
-def _ler_bloco(ws, posicoes: dict[str, int], inicio: int, fim: int) -> dict[str, list]:
-    """Lê as colunas necessárias das linhas [inicio, fim] (1-based) em UMA requisição."""
-    from gspread.utils import ValueRenderOption
-
-    nomes = list(posicoes)
-    faixas = [
-        f"{_letra_coluna(posicoes[n])}{inicio}:{_letra_coluna(posicoes[n])}{fim}" for n in nomes
-    ]
-    resultado = _com_retry(
-        lambda: ws.batch_get(faixas, value_render_option=ValueRenderOption.unformatted),
-        f"ler linhas {inicio}–{fim}",
+def _requisitar_csv(sessao) -> bytes:
+    """Uma tentativa de download. HTTP de erro vira HTTPError (o retry decide se repete)."""
+    resposta = sessao.get(
+        config.URL_EXPORTACAO.format(id=config.SPREADSHEET_ID),
+        params={"format": "csv", "gid": config.GID_CONSOLIDADO},
+        timeout=(20, TIMEOUT_REQUISICAO_S),
     )
-    tamanho = fim - inicio + 1
-    dados: dict[str, list] = {}
-    for nome, faixa in zip(nomes, resultado):
-        col = [(linha[0] if linha else None) for linha in faixa]
-        dados[nome] = col + [None] * (tamanho - len(col))  # a API corta vazios finais
-    return dados
+    resposta.raise_for_status()
+    tipo = resposta.headers.get("content-type", "")
+    if not tipo.startswith("text/csv"):  # página de login/erro em HTML vem com HTTP 200
+        raise ErroColeta(
+            f"A exportação não devolveu CSV (content-type: {tipo or 'ausente'}). Verifique se a "
+            "planilha está compartilhada com a conta de serviço e se o download é permitido."
+        )
+    return resposta.content
 
 
-def _bloco_vazio(dados: dict[str, list]) -> bool:
-    return all(_vazio(v) for col in dados.values() for v in col)
+def _baixar_csv() -> bytes:
+    """Exporta a aba como CSV com a conta de serviço (escopo só de leitura)."""
+    from google.auth.transport.requests import AuthorizedSession
+    from google.oauth2.service_account import Credentials
+
+    if not config.SPREADSHEET_ID:
+        raise ErroColeta("ID da planilha não definido (variável de ambiente SPREADSHEET_ID).")
+    _exigir_credenciais()
+    credenciais = Credentials.from_service_account_file(
+        str(config.CAMINHO_CREDENCIAIS),
+        scopes=["https://www.googleapis.com/auth/drive.readonly"],
+    )
+    with AuthorizedSession(credenciais) as sessao:
+        return _com_retry(lambda: _requisitar_csv(sessao), "baixar CSV da planilha")
 
 
 @task(
@@ -201,35 +234,22 @@ def _bloco_vazio(dados: dict[str, list]) -> bool:
 )
 def _coletar_sheets() -> pd.DataFrame:
     t0 = time.time()
-    ws = _abrir_aba(config.SPREADSHEET_ID, config.ABA_CONSOLIDADO)
-    cabecalho = [str(c).strip() for c in _com_retry(lambda: ws.row_values(1), "ler cabeçalho")]
-    posicoes = _resolver_colunas(cabecalho)
+    conteudo = _baixar_csv()
+    print(f"CSV baixado: {len(conteudo) / 1e6:.1f} MB em {time.time() - t0:.1f}s.")
+    cabecalho, bruto = _ler_csv(conteudo)
 
     hash_atual = _hash_cabecalho(cabecalho)
     anterior = _ler_estado().get("hash_cabecalho")
     if anterior and anterior != hash_atual:
         print("Aviso: o cabeçalho da planilha mudou desde a última coleta; confira o mapa de colunas.")
 
-    pedacos: list[pd.DataFrame] = []
-    linha = 2
-    while linha <= ws.row_count:
-        fim = min(linha + config.BLOCO_LINHAS - 1, ws.row_count)
-        dados = _ler_bloco(ws, posicoes, linha, fim)
-        if _bloco_vazio(dados):
-            break
-        pedacos.append(_montar_dataframe(dados, linha))
-        print(f"Linhas {linha}–{fim} lidas.")
-        linha = fim + 1
-        time.sleep(config.PAUSA_ENTRE_BLOCOS_S)
-
-    if not pedacos:
-        raise ErroColeta("A aba não retornou nenhuma linha de dados.")
-    bruto = pd.concat(pedacos, ignore_index=True)
     # descarta linhas de preenchimento: colunas de fórmula (ex.: Tag Brandwatch = "Não") vão até
     # o fim da grade. Linha útil = tem link, data ou rede.
     util = bruto[COLUNAS_OBRIGATORIAS].map(lambda v: not _vazio(v)).any(axis=1)
     print(f"Linhas de preenchimento descartadas: {int((~util).sum())}")
     bruto = _uniformizar_tipos(bruto[util].reset_index(drop=True))
+    if bruto.empty:
+        raise ErroColeta("A aba não retornou nenhuma linha de dados.")
     print(f"Coleta concluída: {len(bruto)} linhas em {time.time() - t0:.1f}s.")
     _gravar_estado(len(bruto), hash_atual)
     return bruto

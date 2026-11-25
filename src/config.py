@@ -9,8 +9,8 @@ CAMINHO_CREDENCIAIS = BASE_DIR / "src" / "credentials.json"  # nunca versionar
 # ID da planilha "Consolidado Redes Sociais - Simplificado": informe por variável de ambiente.
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "1nucAY1rCnKG-lYPMhxRFJQm7U4GV4JrtFntameyFepE")
 ABA_CONSOLIDADO = "Consolidado"
-BLOCO_LINHAS = 15_000  # 15–20 mil linhas por requisição
-PAUSA_ENTRE_BLOCOS_S = 1.5  # respeita ~60 leituras/min por usuário
+GID_CONSOLIDADO = os.getenv("GID_CONSOLIDADO", "1568822592")  # id fixo da aba Consolidado (o `gid` da URL); não muda se renomear
+URL_EXPORTACAO = "https://docs.google.com/spreadsheets/d/{id}/export"
 
 # Planilha qualitativa (opcional): se falhar, o flow segue sem ela.
 SPREADSHEET_ID_QUALITATIVO = os.getenv("SPREADSHEET_ID_QUALITATIVO", "")

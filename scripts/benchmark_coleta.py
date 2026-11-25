@@ -1,4 +1,4 @@
-"""Mede tempo, nº de linhas e tamanho do payload da leitura da planilha (não grava cache).
+"""Mede tempo, nº de linhas e tamanho do payload da leitura da planilha (não grava bruto.parquet).
 
   python scripts/benchmark_coleta.py
 """

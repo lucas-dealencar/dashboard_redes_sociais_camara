@@ -9,7 +9,7 @@ Você é o **revisor do ETL**. Não edite arquivos; reporte achados. Leia o `CLA
 
 ## Checklist
 1. **Segredos**: `src/credentials.json`, `.env`, `*.json.key` e `cache/` fora do git e nunca impressos em logs ou JSONs.
-2. **Coleta**: blocos com retries, `UNFORMATTED_VALUE`, falha clara se o cabeçalho mudar, planilha só lida.
+2. **Coleta**: CSV exportado com retries e checagem de arquivo incompleto, falha clara se o cabeçalho mudar, planilha só lida.
 3. **Tipagem**: datas por extenso, `14%`, `2.253`; vazio = `NA`, nunca `0`; typos da origem mapeados por nome exato.
 4. **Dados**: duplicidade de `Post - Link`, datas plausíveis, taxas 0–100; linhas lidas vs. processadas vs. publicadas (as perdas têm explicação?).
 5. **Fórmulas** vs. CLAUDE.md: engajamento básico, denominador identificado, variação com anterior zero, p.p., crescimento de seguidores, benchmark que exclui o período avaliado, sem total misto de alcance/visualizações/impressões, `n` em todo grupo. Recalcule 3–5 casos à mão e compare.
