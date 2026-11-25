@@ -1,6 +1,6 @@
 # Dashboard Consolidado de Redes Sociais — Câmara dos Deputados
 
-Pipeline Prefect que lê a planilha **Consolidado Redes Sociais - Simplificado** (Google Sheets, ~80 mil linhas), limpa, transforma, agrega e publica JSONs via `git push`. O dashboard estático em `docs/` (GitHub Pages, branch `main`, pasta `/docs`) consome esses JSONs. Não há banco nem backend: os JSONs versionados são a fonte do site.
+Pipeline Prefect que lê a planilha **Consolidado Redes Sociais - Simplificado** (Google Sheets, ~80 mil linhas), limpa, transforma, agrega e publica JSONs via `git push`. O dashboard estático em `docs/` (GitHub Pages, branch `main`, pasta `/docs`) consome esses JSONs; o código-fonte do front fica em `frontend/` (React + TypeScript + Vite) e o build é gravado em `docs/`. Não há banco nem backend: os JSONs versionados são a fonte do site.
 
 Escopo funcional: ver a proposta "Dashboard integrado de redes sociais" (nov/2026). Redes: Instagram, Facebook, TikTok, X, Threads, Bluesky, LinkedIn (+ YouTube/Shorts, que aparecem na planilha). Abas do dashboard: Visão geral, Evolução e redes, Conteúdos, Público.
 
@@ -79,6 +79,9 @@ python main.py                             # coleta, gera e publica (commit + pu
 python main.py --agendar                   # roda todo dia às 11:30 (America/Sao_Paulo)
 python scripts/benchmark_coleta.py         # mede tempo/tamanho da leitura da planilha
 python -m http.server -d docs              # abrir o dashboard (fetch não funciona em file://)
+cd frontend; npm install                   # front: uma vez (Node 18+)
+npm run dev                                # front em desenvolvimento (serve ../docs/dados em /dados)
+npm run build                              # typecheck + gera docs/index.html e docs/assets/ (commitar o resultado)
 python -m pytest tests                     # testes de regras (taxas, variação, datas, benchmark)
 ```
 
@@ -91,7 +94,12 @@ Valide uma mudança rodando `--sem-publicar`, conferindo os tamanhos em `docs/da
 - `config/`: dados de negócio editáveis sem tocar em código: `redes.py` (ordem e KPI principal), `colunas.py` (mapa coluna da planilha → nome interno), `taxonomia_temas.json`, `dicionario_metricas.json`.
 - `src/coleta.py`, `src/transformacao/`, `src/carga.py`, `src/publicacao.py`: uma etapa cada, expostas como `@task`.
 - `src/transformacao/`: `limpeza.py` (tipos, datas, NA), `publicacoes.py` (dedup, classificação, proposições), `metricas.py` (engajamento, taxas, variação), `benchmark.py`, `validacao.py` (`_validar`).
-- `docs/`: site estático. `assets/js/` em módulos por aba (`visao_geral.js`, `evolucao.js`, `conteudos.js`, `publico.js`) + `filtros.js`, `dados.js` (carga e cache dos JSONs), `utils.js`.
+- `frontend/`: fonte do dashboard (React 18 + TypeScript + Vite, gráficos em SVG próprio, sem biblioteca de gráficos).
+  - `src/data/source.ts`: `PipelineDataSource`, única porta de entrada dos JSONs (manifest → benchmark, dicionário, anotações → partições). Contrato tipado aqui: mudou o JSON, muda este arquivo.
+  - `src/data/catalog.ts`: aparência por rede; KPI principal e disponibilidade de métricas vêm de `benchmark.json` (`kpi_por_rede`, `cobertura`).
+  - `src/domain/`: regras puras (agregação, KPIs, variação, benchmark, picos), sem React. Engajamento e taxa por publicação vêm prontos do pipeline; o front só agrega.
+  - `src/tabs/`, `src/components/`: telas. A aba Público mostra "dados indisponíveis" enquanto `meta.hasAudience` for falso.
+- `docs/`: site publicado. `index.html` e `assets/{js,css,img}` são **gerados** por `npm run build` (não editar à mão); `dados/` é do pipeline.
 - `tests/`: testes das regras de cálculo, com fixtures pequenas em `tests/fixtures/`.
 - `scripts/`: utilitários fora do flow.
 - `pipeline_prompts/`: roteiro de prompts de outro projeto (intranet em Node). Não faz parte deste pipeline; não altere.
@@ -106,7 +114,7 @@ Cada agent tem escopo de arquivos próprio; dois agents nunca editam o mesmo arq
 | `revisor-etl` | somente leitura: audita o ETL e os JSONs gerados | opus |
 | `orquestrador-prefect` | `main.py`, deployment, agendamento, retries, CLI | sonnet |
 | `prefect-debugger` | somente diagnóstico: logs, reprodução, causa raiz | sonnet |
-| `frontend-dashboard` | `docs/index.html`, `docs/assets/` | sonnet |
+| `frontend-dashboard` | `frontend/`, `docs/index.html`, `docs/assets/` (gerados pelo build) | sonnet |
 
 Fluxo: `etl-pipeline` constrói → `revisor-etl` audita → `orquestrador-prefect` liga as etapas no flow → em falha, `prefect-debugger` diagnostica e indica qual agent corrige. O front pode começar assim que o contrato do `manifest.json` estiver fechado. Mudança no contrato dos JSONs: avisar o usuário para acionar `frontend-dashboard`. Dois agents nunca editam o mesmo arquivo; `revisor-etl` e `prefect-debugger` nunca editam.
 
@@ -116,14 +124,15 @@ Fluxo: `etl-pipeline` constrói → `revisor-etl` audita → `orquestrador-prefe
 - Cada etapa é uma `@task` com `name` em português; `log_prints=True`; `retries` nas que acessam rede (Sheets, git).
 - A transformação termina em `_validar` (colunas, tipos, datas plausíveis, duplicidade de `Post - Link`, taxas entre 0 e 100). Ao mudar colunas, atualize `config/colunas.py` e a validação juntos.
 - JSON com `ensure_ascii=False`, escrita atômica; converta NaN/NA/numpy para tipos nativos (`NA` → `null`) antes de serializar.
-- Front-end em JS puro, módulos ES, sem framework nem build. Mensagens em pt-BR; use `esc()` ao inserir texto em HTML. Todo número exibido indica unidade e, em taxas, o denominador.
+- Front-end em React + TypeScript (`frontend/`), build Vite para `docs/` com nomes fixos (`assets/js/app.js`, `assets/css/app.css`). Rode `npm run build` e commite `docs/index.html` + `docs/assets/` junto com a mudança em `frontend/`. Mensagens em pt-BR; o React escapa texto (não use `dangerouslySetInnerHTML`). Todo número exibido indica unidade e, em taxas, o denominador. `null` é n/d, nunca zero.
+- O contrato dos JSONs em `docs/dados/` é a API do produto (também servirá ao futuro app Flutter): regras de negócio novas entram de preferência no pipeline, não só no front.
 - Exportação CSV/XLSX e download de gráficos são requisitos do front (etapa 2).
 
 ## Cuidados importantes
 
 - **Nunca versionar nem imprimir** `src/credentials.json` (conta de serviço), `.env`, `*.json.key`. `cache/` também não é versionado (pode conter o bruto de 80 mil linhas).
 - `docs/dados/` é versionado e publicado: contém só dados agregados ou públicos (links de posts já públicos). Não publique dados pessoais nem demografia desagregada sem checar as regras institucionais de privacidade.
-- Não leia JSONs de `docs/dados/` inteiros; extraia com `python -c`, `node -e` ou `grep`. Mesmo para `app.js`/`style.css`, se crescerem.
+- Não leia JSONs de `docs/dados/` inteiros; extraia com `python -c`, `node -e` ou `grep`. Não leia `docs/assets/js/app.js` (minificado); edite a fonte em `frontend/src/`.
 - `publicar_dados_git` faz `push` na `main` de verdade. Não rode `python main.py` sem `--sem-publicar` a menos que o usuário peça.
 - Commits do pipeline: `chore: atualiza dados do dashboard (AAAA-MM-DD HH:MM)`. Manuais: Conventional Commits em português.
 - `SPREADSHEET_ID` e `SPREADSHEET_ID_QUALITATIVO` sobrescrevem os IDs por variável de ambiente. Testes que escrevam em planilha usam cópia, nunca produção.
