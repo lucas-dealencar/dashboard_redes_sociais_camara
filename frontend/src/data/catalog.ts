@@ -15,7 +15,7 @@ export interface PlatformInfo {
   kpiLabel: string;
   /** KPI proposto na proposta (pode diferir do usado quando a planilha não traz a coluna) */
   kpiProposed: string | null;
-  /** Requisito da proposta (Instagram e TikTok) e sem substituto; os demais são "a validar" */
+  /** true quando a rede usa o KPI definido (engajamento), sem substituto */
   kpiValidated: boolean;
   kpiNote: string | null;
   support: string;
@@ -54,7 +54,6 @@ const AVAIL_FROM_PIPELINE: Record<AvailKey, string> = {
   reach: 'alcance', views: 'visualizacoes', impressions: 'impressoes', likes: 'curtidas', comments: 'comentarios', shares: 'compartilhamentos',
   saves: 'salvos', clicks: 'cliques_link', engagement: 'engajamento', er: 'taxa_engajamento',
 };
-const REQUISITO = new Set<PlatformId>(['instagram', 'tiktok']);
 
 /** Preenchidos por `configurePlatforms` (mutados no lugar para manter as referências importadas). */
 export const PLATFORMS: PlatformInfo[] = [];
@@ -81,7 +80,7 @@ export function configurePlatforms(
     const info: PlatformInfo = {
       id, name: st.name, short: st.short, color: st.color, dash: st.dash, support: st.support,
       kpi, kpiLabel: KPI_LABEL[kpi], kpiProposed: k?.kpi_proposto ?? null,
-      kpiValidated: REQUISITO.has(id) && !!k && !k.substituto,
+      kpiValidated: !k?.substituto,
       kpiNote: k?.motivo ?? null,
       available,
       // seguidores só contam como disponíveis com cobertura plena (hoje a planilha traz a coluna quase vazia)

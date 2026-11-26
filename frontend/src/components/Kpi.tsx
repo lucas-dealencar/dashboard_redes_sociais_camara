@@ -57,11 +57,11 @@ const deltaTxt = (r: KpiResult) => (r.delta === null ? 'variação não calculá
 const deltaCls = (r: KpiResult) => (r.delta === null || Math.abs(r.delta) < 0.05 ? 'flat' : (r.def.id === 'lost' ? r.delta < 0 : r.delta > 0) ? 'up' : 'down');
 
 /** Cartão de seção: KPI principal, variação e indicadores de apoio (o benchmark fica por rede). */
-export function SectionCard({ main, others, title, support }: { main: KpiResult; others: KpiResult[]; title: string; support: string }) {
+export function SectionCard({ main, others, title, support, principal }: { main: KpiResult; others: KpiResult[]; title: string; support: string; principal?: boolean }) {
   return (
     <div className="plat-card" style={{ borderTopColor: 'var(--mint)' }}>
-      <h4><span className="badge" style={{ fontSize: 15 }}><i className="dot" style={{ background: 'var(--mint)' }} />{title}</span><span className="pill req">KPI principal</span></h4>
-      <span className="small muted">KPI principal: {main.def.label}</span>
+      <h4><span className="badge" style={{ fontSize: 15 }}><i className="dot" style={{ background: 'var(--mint)' }} />{title}</span>{principal && <span className="pill req">KPI principal</span>}</h4>
+      <span className="small muted">{principal ? 'KPI principal: ' : ''}{main.def.label}</span>
       <span className="big">{fmtKpi(main.value, main.def.fmt)}</span>
       {main.value !== null && <span className={`k-delta ${deltaCls(main)}`}>{deltaTxt(main)}</span>}
       <ul>

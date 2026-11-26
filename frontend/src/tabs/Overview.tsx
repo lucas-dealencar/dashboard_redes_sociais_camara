@@ -42,7 +42,7 @@ export function Overview() {
       <Section title="Resumo de Métricas">
         {!hasFollowers && <Note>Audiência (seguidores, novos, perdas e saldo) não aparece: a planilha atual traz essas colunas vazias. Veja “Limitações da base” em Metodologia.</Note>}
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', marginTop: hasFollowers ? 0 : 12 }}>
-          {SECTIONS.filter((c) => hasFollowers || c.id !== 'audiencia').map((c) => <SectionCard key={c.id} title={SHORT[c.id]} support={SUPPORT[c.id]} main={kpis[c.main]} others={c.others.map((id) => kpis[id])} />)}
+          {SECTIONS.filter((c) => hasFollowers || c.id !== 'audiencia').map((c) => <SectionCard key={c.id} title={SHORT[c.id]} support={SUPPORT[c.id]} principal={c.id === 'interacoes'} main={kpis[c.main]} others={c.others.map((id) => kpis[id])} />)}
         </div>
       </Section>
 
@@ -125,7 +125,7 @@ function CompareSection() {
     <Section title="Tabela comparativa entre redes" sub="“n/d” = a rede não fornece a métrica (diferente de zero)">
       <Panel light title="Comparativo por rede" sub="Clique nos títulos das colunas para ordenar. Taxas só são comparáveis dentro da mesma base." tools={<ExportButtons table={exp} />}>
         <DataTable rows={rows} cols={cols} rowKey={(r) => r.p} defaultSort="kpi" />
-        <p className="small muted" style={{ marginTop: 8 }}>KPI principal: Instagram e TikTok são requisitos da proposta; as demais redes são propostas a validar com a equipe de comunicação.</p>
+        <p className="small muted" style={{ marginTop: 8 }}>KPI principal: engajamento (curtidas, comentários e compartilhamentos). Redes sem esse dado na planilha usam um substituto, indicado abaixo do valor.</p>
       </Panel>
     </Section>
   );

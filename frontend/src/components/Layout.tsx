@@ -292,7 +292,7 @@ export function MethodModal() {
                   <tr key={p.id}>
                     <td><PlatformBadge id={p.id} /></td>
                     <td title={p.kpiNote ?? undefined}>{p.kpiLabel}{k?.substituto && k.kpi_proposto ? <><br /><small className="muted">proposto: {KPI_NOME[k.kpi_proposto] ?? k.kpi_proposto}</small></> : null}</td>
-                    <td><span className={`pill ${p.kpiValidated ? 'req' : 'validar'}`} title={p.kpiNote ?? undefined}>{p.kpiValidated ? 'Requisito' : k?.substituto ? 'Substituto' : 'A validar'}</span></td>
+                    <td><span className={`pill ${p.kpiValidated ? 'req' : 'validar'}`} title={p.kpiNote ?? undefined}>{p.kpiValidated ? 'Definido' : 'Substituto'}</span></td>
                     {COV_COLS.map((c) => { const m = cov[c.k]; const st = m?.status ?? 'indisponível'; return <td key={c.k} className={st === 'indisponível' ? 'no' : 'ok'} title={m ? `${m.pct.toLocaleString('pt-BR')}% (${m.n.toLocaleString('pt-BR')} linhas)` : undefined}>{st === 'disponível' ? '✓' : st === 'parcial' ? <small>parcial</small> : '—'}</td>; })}
                   </tr>
                 );

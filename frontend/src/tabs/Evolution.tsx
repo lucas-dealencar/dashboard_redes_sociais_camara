@@ -14,7 +14,7 @@ import type { PlatformId } from '../types';
 import { Section, Panel, Well, Note, Select, Toggle, ExportButtons, PlatformBadge, Empty } from '../components/ui/ui';
 import { Picker } from '../components/ui/picker';
 import { SmallMultiples } from '../components/charts/SmallMultiples';
-import { Legend, LineChart, PngButton, RangeBar, type LineSeries } from '../components/charts/charts';
+import { Legend, LineChart, PngButton, type LineSeries } from '../components/charts/charts';
 import { fmtKpi } from '../components/Kpi';
 import type { Table } from '../utils/export';
 
@@ -27,7 +27,7 @@ export function Evolution() {
   const autoGran: Granularity = rangeLen(range) <= 45 ? 'dia' : rangeLen(range) <= 200 ? 'semana' : 'mes';
   const [granPick, setGranPick] = useState<Granularity | null>(null);
   const gran = granPick ?? autoGran;
-  const [metrics, setMetrics] = useState<EvoMetric[]>(['reach', 'engagement', 'er']);
+  const [metrics, setMetrics] = useState<EvoMetric[]>(['engagement', 'reach', 'er']);
   const [byNet, setByNet] = useState(false);
   const [compare, setCompare] = useState(true);
   const [selIdx, setSelIdx] = useState<number | null>(null);
@@ -103,7 +103,6 @@ export function Evolution() {
               ? { name: 'series-historicas', headers: ['Período', ...covered.map((p) => p.def.label)], rows: buckets.map((b, i) => [b.label, ...covered.map((p) => p.vals[i])]) }
               : { name: `serie-${one.id}`, headers: ['Período', ...(useNet ? one.perNet.map((s) => s.label) : ['Consolidado', 'Período anterior'])], rows: buckets.map((b, i) => [b.label, ...(useNet ? one.perNet.map((s) => s.values[i]) : [one.vals[i], one.prevVals[i] ?? null])]) };
             const peaksOne = !multi && !useNet && one ? one.peaks : [];
-            const multiPeaks = multi && covered.some((p) => p.peaks.length > 0);
             const multiGaps = multi && covered.some((p) => p.vals.some((v) => v === null));
             if (!one) return <Empty>Selecione ao menos uma métrica.</Empty>;
             return (
@@ -126,7 +125,6 @@ export function Evolution() {
                       <div className="legend">
                         {multi ? covered.map((p, k) => <span key={p.id} className="badge"><i style={{ width: 18, borderTop: `3px ${dashes[k % 4] ? 'dashed' : 'solid'} ${palette[k % palette.length]}`, display: 'inline-block' }} /> {p.def.label}</span>) : <span className="badge"><i style={{ width: 18, borderTop: '3px solid #134e5e', display: 'inline-block' }} /> Consolidado</span>}
                         {!multi && compare && <span className="badge muted"><i style={{ width: 18, borderTop: '3px dashed #8fa6aa', display: 'inline-block' }} /> Período anterior</span>}
-                        {(peaksOne.length > 0 || multiPeaks) && <span className="badge"><i style={{ width: 12, height: 12, borderRadius: '50%', background: '#f5a623', border: '2px solid #07333a', display: 'inline-block' }} /> Pico</span>}
                         {multiGaps && <span className="badge muted"><i style={{ width: 16, height: 10, background: 'repeating-linear-gradient(45deg,#b5c9cc 0 2px,#eef4f5 2px 5px)', display: 'inline-block' }} /> Sem dados</span>}
                         <span className="badge"><i style={{ width: 10, height: 10, background: '#7a56d6', transform: 'rotate(45deg)', display: 'inline-block' }} /> Anotação</span>
                         {multi && panels.length > covered.length && <span className="badge muted">Indisponíveis para as redes selecionadas: {panels.filter((p) => !covered.includes(p)).map((p) => p.def.label).join(', ')}</span>}
@@ -142,7 +140,7 @@ export function Evolution() {
 
       <Section title="Investigação de picos e anotações" sub="A coincidência temporal indica hipótese, não comprova causalidade">
         <div className="grid g-main">
-          <Panel title={sb ? `Período selecionado: ${sb.label}` : 'Selecione um ponto no gráfico'} sub={sb ? `${fmtDMY(sb.start)} a ${fmtDMY(sb.end)}` : 'ou escolha um dos picos detectados'}>
+          <Panel>
             {allPeaks.length > 0 && <div className="chips" style={{ marginBottom: 12 }}>{allPeaks.map((pk, k) => <button key={k} className="chip" aria-pressed={selIdx === pk.i} onClick={() => setSelIdx(pk.i)}><i />{pk.metric} · {buckets[pk.i].label}</button>)}</div>}
             {sb ? <BucketDetail start={sb.start} end={sb.end} onOpenPost={setPostId} /> : <Empty>Nenhum ponto selecionado. Os picos (círculos laranja) são pontos acima de Q3 + 1,5 × amplitude interquartil.</Empty>}
           </Panel>
@@ -176,6 +174,7 @@ function BucketDetail({ start, end, onOpenPost }: { start: number; end: number; 
   const posts = filterPosts(ds, sel, start, end).sort((a, b) => (postEngagement(b) ?? -1) - (postEngagement(a) ?? -1)).slice(0, 8);
   const items = EVO_METRICS.filter((m) => m.id !== 'followers').map((m) => ({ m, v: evalKpi(m.kpi, total, start, end) }));
   const peakAn = peakNotesIn(notes, start, end).map((n) => `Pico · ${short(n.text)}`);
+  const noteOf = (p: { url: string }) => notes.get(noteKey(p.url));
   const an = filterPosts(ds, sel, start, end).flatMap((p) => { const n = notes.get(noteKey(p.url)); return n ? [`${fmtDM(p.day)} · ${short(n.text)}`] : []; });
   return (
     <>
@@ -186,10 +185,11 @@ function BucketDetail({ start, end, onOpenPost }: { start: number; end: number; 
       <h4 style={{ margin: '14px 0 8px' }}>Publicações relevantes (por engajamento)</h4>
       <div className="grid" style={{ gap: 8 }}>
         {posts.map((p) => (
-          <div key={p.id} className="post-item">
-            <span className="flex between"><PlatformBadge id={p.platform} /><span className="small muted">{fmtDMY(p.day)} · {FORMAT_BY_ID[p.format].name}</span></span>
+          <div key={p.id} className={`post-item${noteOf(p) ? ' annotated' : ''}`}>
+            <span className="flex between"><span className="flex"><PlatformBadge id={p.platform} />{noteOf(p) && <span className="annot">Anotação</span>}</span><span className="small muted">{fmtDMY(p.day)} · {FORMAT_BY_ID[p.format].name}</span></span>
             <button className="t link" style={{ textAlign: 'left', background: 'none', border: 0, padding: 0 }} onClick={() => onOpenPost(p.id)}>{p.title}</button>
-            <span className="small">{PLATFORM_BY_ID[p.platform].kpiLabel}: <b>{postMetric(p, 'kpi') === null ? ND : fmtCompact(postMetric(p, 'kpi') as number)}</b> · engajamento: <b>{postEngagement(p) === null ? ND : fmtInt(postEngagement(p) as number)}</b> · <a className="link" href={p.url} target="_blank" rel="noopener noreferrer">abrir link</a></span>
+            <span className="small">Engajamento: <b>{postEngagement(p) === null ? ND : fmtInt(postEngagement(p) as number)}</b> · alcance: <b>{p.metrics.reach === null ? ND : fmtCompact(p.metrics.reach)}</b> · <a className="link" href={p.url} target="_blank" rel="noopener noreferrer">abrir link</a></span>
+            {noteOf(p) && <span className="small" style={{ color: '#4a2c93' }}><b>Anotação:</b> {short(noteOf(p)!.text)}</span>}
           </div>
         ))}
         {!posts.length && <Empty>Sem publicações neste período para os filtros ativos.</Empty>}
@@ -205,13 +205,14 @@ function NetworkKpis() {
   const [selNet, setSelNet] = useState<PlatformId>(plats[0] ?? 'instagram');
   const net = plats.includes(selNet) ? selNet : plats[0];
   const refB = useRef<HTMLDivElement>(null);
+  const [allNets, setAllNets] = useState(false);
   const { benchDays } = state;
   const prev = prevRange(range);
   const cards = plats.map((p) => {
     const s2 = { ...sel, platforms: [p] };
     const t = buildTable(ds, s2);
     const main = computeKpi(ds, s2, principalId(p), range, prev, benchDays, false);
-    return { p, t, main, followers: evalKpi('followers', t, range.start, range.end), posts: evalKpi('posts', t, range.start, range.end), eng: evalKpi('engagement', t, range.start, range.end), er: evalKpi('er', t, range.start, range.end), net: evalKpi('net', t, range.start, range.end) };
+    return { p, t, main, followers: evalKpi('followers', t, range.start, range.end), posts: evalKpi('posts', t, range.start, range.end), reach: evalKpi('reach', t, range.start, range.end), er: evalKpi('er', t, range.start, range.end), net: evalKpi('net', t, range.start, range.end) };
   });
   const [kpiPick, setKpiPick] = useState<KpiId | null>(null);
   const options: KpiId[] = net ? ([principalId(net), 'reach', 'views', 'impressions', 'engagement', 'er'] as KpiId[]).filter((k, i, a) => a.indexOf(k) === i && KPI_BY_ID[k].covers(net)) : [];
@@ -228,20 +229,20 @@ function NetworkKpis() {
   return (
     <Section title="KPI principal por rede e benchmark interno" sub="Janela móvel com mediana e quartis, excluindo o período avaliado">
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))' }}>
-        {cards.map((c) => {
+        {(allNets ? cards : cards.slice(0, 4)).map((c) => {
           const b = c.main.bench, def = c.main.def, info = PLATFORM_BY_ID[c.p];
           return (
             <button key={c.p} className={`plat-card${net === c.p ? ' sel' : ''}`} style={{ borderTopColor: info.color }} onClick={() => setSelNet(c.p)} aria-pressed={net === c.p}>
-              <h4><PlatformBadge id={c.p} /><span className={`pill ${info.kpiValidated ? 'req' : 'validar'}`}>{info.kpiValidated ? 'Requisito' : 'A validar'}</span></h4>
+              <h4><PlatformBadge id={c.p} />{!info.kpiValidated && <span className="pill validar">Substituto</span>}</h4>
               <span className="small muted">KPI principal: {KPI_BY_ID[principalId(c.p)].label}</span>
               <span className="big">{fmtKpi(c.main.value, def.fmt)}</span>
               <span className={`k-delta ${c.main.delta === null ? 'flat' : c.main.delta > 0 ? 'up' : 'down'}`}>{c.main.delta === null ? 'variação não calculável' : `${def.delta === 'pp' ? fmtDeltaPP(c.main.delta) : fmtDeltaPct(c.main.delta)} vs. anterior`}</span>
-              {b && c.main.value !== null ? <><RangeBar q1={b.q1} q3={b.q3} med={b.median} value={c.main.value} /><span className="small"><span className={`pill ${b.status}`}>{b.status === 'acima' ? '▲ acima do padrão' : b.status === 'abaixo' ? '▼ abaixo do padrão' : '● dentro do padrão'}</span> <span className="muted">mediana {fmtKpi(b.median, def.fmt)}</span></span></> : <span className="small nd">Benchmark: histórico insuficiente</span>}
+              {b && c.main.value !== null ? <span className="small"><span className={`pill ${b.status}`}>{b.status === 'acima' ? '▲ acima do padrão' : b.status === 'abaixo' ? '▼ abaixo do padrão' : '● dentro do padrão'}</span> <span className="muted">mediana {fmtKpi(b.median, def.fmt)}</span></span> : <span className="small nd">Benchmark: histórico insuficiente</span>}
               <ul>
                 <li><span>Seguidores</span><b>{c.followers === null ? ND : fmtCompact(c.followers)}</b></li>
                 <li><span>Saldo líquido</span><b>{c.net === null ? ND : fmtCompact(c.net)}</b></li>
                 <li><span>Publicações</span><b>{c.posts === null ? ND : fmtInt(c.posts)}</b></li>
-                <li><span>Engajamento</span><b>{c.eng === null ? ND : fmtCompact(c.eng)}</b></li>
+                <li><span>Alcance</span><b>{c.reach === null ? ND : fmtCompact(c.reach)}</b></li>
                 <li><span>Taxa de engaj. {c.t.erBase ? `(${c.t.erBase === 'reach' ? 'alcance' : c.t.erBase === 'views' ? 'visual.' : 'impr.'})` : ''}</span><b>{c.er === null ? ND : fmtPct(c.er, 2)}</b></li>
               </ul>
               <span className="small muted">Apoio: {info.support}</span>
@@ -249,6 +250,11 @@ function NetworkKpis() {
           );
         })}
       </div>
+      {cards.length > 4 && (
+        <div className="more-nets">
+          <button type="button" className="btn" aria-expanded={allNets} onClick={() => setAllNets(!allNets)}>{allNets ? 'Ver menos redes ▴' : `Ver mais redes (${cards.length - 4}) ▾`}</button>
+        </div>
+      )}
       {net && wk && kpi && (
         <div style={{ marginTop: 18 }}>
           <Panel title={`Faixa de referência — ${PLATFORM_BY_ID[net].name}`} sub={`Semanas contra a mediana e a faixa Q1–Q3 das semanas equivalentes nos ${benchDays} dias anteriores a cada ponto.`}

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { Dataset } from './types';
 import { PipelineDataSource, type DataSource } from './data/source';
 import { StoreProvider, useStore } from './state/store';
-import { Cover, FilterBar, Footer, MethodModal, Nav, PostDrawer } from './components/Layout';
+import { Cover, Footer, MethodModal, Nav, PostDrawer } from './components/Layout';
+import { StickyFilters } from './components/StickyFilters';
 import { Overview } from './tabs/Overview';
 import { Evolution } from './tabs/Evolution';
 import { Contents } from './tabs/Contents';
@@ -20,7 +21,7 @@ function Shell() {
       <Nav />
       <main>
         <div className="wrap">
-          <FilterBar />
+          <StickyFilters />
           <div role="tabpanel">
             {state.tab === 'visao' && <Overview />}
             {state.tab === 'evolucao' && <Evolution />}

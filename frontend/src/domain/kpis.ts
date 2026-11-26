@@ -151,10 +151,7 @@ export function computeKpi(ds: Dataset, sel: Selection, id: KpiId, r: Range, pre
   return { def, value, prev: pv, delta, bench, have, miss, medianPerPost, spark };
 }
 
-/** KPI principal por rede (proposta §8). */
+/** KPI principal da rede, definido pelo pipeline (config/redes.py): hoje, engajamento. */
 export function principalId(p: PlatformId): KpiId {
-  const info = PLATFORM_BY_ID[p];
-  // Instagram: Alcance/Seguidores (proposta §8) quando houver seguidores na fonte; senão, o KPI do pipeline.
-  if (p === 'instagram' && info.hasFollowers) return 'reachPerFollower';
-  return info.kpi;
+  return PLATFORM_BY_ID[p].kpi;
 }

@@ -1,7 +1,7 @@
 """Redes, ordem de exibição e KPI principal por rede.
 
-KPIs de Instagram e TikTok são requisito da proposta; os demais estão a validar.
-`kpi` é o nome interno da coluna/medida usada como destaque.
+O KPI principal de todas as redes é o engajamento (decisão da equipe em nov/2026; substitui os
+KPIs por rede da proposta, como alcance no Instagram). `kpi` é o nome interno da medida.
 """
 
 # Prefixo/variações da origem -> nome canônico
@@ -27,27 +27,15 @@ ORDEM_REDES = [
 ]
 
 KPI_PRINCIPAL = {
-    "Instagram": "alcance",
-    "Facebook": "alcance",
-    "TikTok": "visualizacoes",
-    "X": "impressoes",
-    "Threads": "visualizacoes",
-    "Bluesky": "engajamento",
-    "LinkedIn": "impressoes",
+    rede: "engajamento"
+    for rede in [*ORDEM_REDES, "Kwai", "Pinterest"]
 }
 
 # Redes do escopo da proposta (seção 2). As que não aparecem na planilha são reportadas
 # como "sem dados" em vez de sumirem em silêncio.
 REDES_ESCOPO = ["Instagram", "Facebook", "TikTok", "X", "Threads", "Bluesky", "LinkedIn"]
 
-# Quando o KPI proposto não existe na planilha para a rede, usa-se o primeiro substituto com
-# dado, SEMPRE sinalizado como substituto (`kpi_por_rede` no benchmark.json).
-# Padrão para redes sem entrada: alcance -> impressões -> visualizações -> engajamento.
-KPI_SUBSTITUTOS = {
-    "X": ["alcance"],          # impressões não vêm da planilha; "Mtrc - Alcance" é o mais próximo (validar)
-    "Threads": ["alcance"],    # visualizações não vêm da planilha (validar)
-    "TikTok": ["alcance"],
-    "LinkedIn": ["alcance"],
-    "Bluesky": [],
-}
-KPI_SUBSTITUTO_PADRAO = ["alcance", "impressoes", "visualizacoes", "engajamento"]
+# Quando a planilha não traz engajamento para a rede, usa-se o primeiro substituto com dado,
+# SEMPRE sinalizado como substituto (`kpi_por_rede` no benchmark.json).
+KPI_SUBSTITUTOS: dict[str, list[str]] = {}
+KPI_SUBSTITUTO_PADRAO = ["alcance", "impressoes", "visualizacoes"]

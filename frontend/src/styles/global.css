@@ -323,3 +323,23 @@ section{min-width:0}
 .plat-opt .opt-lbl{min-width:0;flex:1 1 auto;overflow-wrap:anywhere;line-height:1.25}
 [data-device=desktop] .plat-pick:not(.plat-wide) .plat-panel{width:min(440px,92vw)}
 [data-device=desktop] .plat-pick:not(.plat-wide) .plat-grid:not(.one){grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* ---------- filtros que acompanham a rolagem ---------- */
+.filters-float { position: fixed; left: 0; right: 0; z-index: 25; pointer-events: none; }
+.filters-float > .wrap { pointer-events: auto; }
+.filters-float:has([aria-haspopup][aria-expanded=true]) { z-index: 60; }
+.filters-open { position: relative; }
+.filters-open .filters { margin: 6px 0 0; padding-bottom: 22px; box-shadow: 0 14px 34px rgba(7, 51, 58, .22); }
+.filters-toggle { position: absolute; right: 18px; bottom: -12px; width: 44px; height: 26px; border: 1px solid var(--ink); border-radius: 999px; background: #fff; color: var(--ink); font-weight: 800; }
+.filters-compact { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 6px; padding: 7px 14px; background: #fff; border: 1px solid #d5e3e4; border-top: 4px solid var(--ink); border-radius: 12px; box-shadow: var(--shadow); font-size: 13px; color: var(--ink); text-align: left; white-space: nowrap; overflow: hidden; }
+.filters-compact .dots { display: inline-flex; }
+.filters-compact .dots .plogo { margin-right: -4px; }
+.filters-compact .chev { margin-left: auto; width: 26px; height: 26px; flex: none; border: 1px solid var(--ink); border-radius: 50%; display: inline-grid; place-items: center; font-weight: 800; }
+[data-device=mobile] .filters-float { overflow-y: auto; }
+[data-device=mobile] .filters-compact { gap: 8px; }
+[data-device=mobile] .filters-compact .dots, [data-device=mobile] .filters-compact .muted { display: none; }
+
+/* ---------- cartões de métrica brancos e publicações anotadas ---------- */
+.kpi { background: #fff; border-left: 1px solid #d5e3e4; border-right: 1px solid #d5e3e4; border-bottom: 1px solid #d5e3e4; }
+.post-item.annotated { border: 2px solid #7a56d6; background: #f6f2ff; }
+.more-nets { display: flex; justify-content: center; margin-top: 14px; }

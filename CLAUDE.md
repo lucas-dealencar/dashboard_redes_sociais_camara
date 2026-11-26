@@ -40,7 +40,7 @@ Armadilhas já observadas (validar sempre com amostra real):
 - Taxa de engajamento = engajamento ÷ denominador × 100. Denominador: alcance, ou visualizações/impressões se não houver alcance, **sempre identificado**. Taxa consolidada = Σ numeradores ÷ Σ denominadores, só com bases compatíveis.
 - Variação % = (atual − anterior) ÷ anterior × 100; anterior = 0 → "não calculável". Taxas comparam-se em p.p. Crescimento de seguidores = saldo líquido ÷ seguidores no início × 100.
 - Seguidores somados são vínculos, não pessoas. Alcance somado entre redes não é audiência única. Não misturar alcance, visualizações e impressões num total sem identificação.
-- **KPI principal por rede** (`config/redes.py`): Instagram alcance/seguidores; Facebook alcance; TikTok visualizações; X impressões; Threads visualizações; Bluesky engajamento; LinkedIn impressões. Os de Instagram e TikTok são requisito; os demais são a validar.
+- **KPI principal** (`config/redes.py`): engajamento em todas as redes (decisão da equipe em nov/2026, no lugar dos KPIs por rede da proposta). Rede sem engajamento na planilha usa substituto sinalizado (alcance → impressões → visualizações).
 - **Benchmark interno**: janela móvel de 90 dias (ajustável), mediana e quartis, **excluindo** o período avaliado; para posts, comparar em idade equivalente. Sinalizar abaixo/dentro/acima do padrão. Em volumes, expor também média/mediana por publicação.
 - Mostrar sempre o `n` de publicações por grupo (tema, formato, célula da matriz) para contextualizar amostras pequenas.
 - Coincidência temporal entre pico e acontecimento é hipótese, não causalidade (texto do front).

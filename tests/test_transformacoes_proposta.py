@@ -131,7 +131,12 @@ def test_cobertura_e_kpi_com_substituto_e_rede_sem_dados():
     assert cob["X"]["metricas"]["impressoes"]["status"] == "indisponível"
     assert cob["X"]["metricas"]["alcance"]["status"] == "disponível"
     kpis = kpi_por_rede(cob)
-    assert kpis["X"]["kpi_proposto"] == "impressoes" and kpis["X"]["kpi_usado"] == "alcance" and kpis["X"]["substituto"]
+    assert kpis["X"]["kpi_proposto"] == "engajamento" and kpis["X"]["kpi_usado"] == "engajamento"
+    assert not kpis["X"]["substituto"]
+    # sem engajamento na planilha: cai no substituto, sinalizado
+    cob["X"]["metricas"]["engajamento"]["status"] = "indisponível"
+    x = kpi_por_rede(cob)["X"]
+    assert x["kpi_usado"] == "alcance" and x["substituto"]
     assert kpis["TikTok"]["situacao"] == "sem_dados"
 
 

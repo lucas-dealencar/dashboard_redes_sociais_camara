@@ -25,8 +25,8 @@ export function Contents() {
   const active = activePlatforms(sel).filter((p) => !sel.profileIds.length || sel.profileIds.some((id) => id.startsWith(p + '-')));
   const [netPick, setNetPick] = useState<'all' | PlatformId>('all');
   const net = netPick !== 'all' && active.includes(netPick) ? netPick : 'all';
-  const [metric0, setMetric] = useState<PostMetricId>('reach');
-  const metric: PostMetricId = net === 'all' && metric0 === 'kpi' ? 'reach' : metric0;
+  const [metric0, setMetric] = useState<PostMetricId>('engagement');
+  const metric: PostMetricId = net === 'all' && metric0 === 'kpi' ? 'engagement' : metric0;
   const [agg0, setAgg] = useState<Agg>('media');
   const mdef = POST_METRICS.find((m) => m.id === metric)!;
   const agg: Agg = mdef.fmt !== 'compact' && metric !== 'er' && agg0 === 'total' ? 'media' : agg0;
@@ -96,7 +96,6 @@ export function Contents() {
           <div className="f-group"><span className="f-label">Amostra mínima (n)</span><Select label="Amostra mínima" value={minN} options={[1, 3, 5, 10].map((n) => ({ id: n, label: `n ≥ ${n}` }))} onChange={setMinN} /></div>
         </div>
         <p className="small muted" style={{ marginTop: 10 }}>{fmtInt(posts.length)} publicações no recorte · {fmtInt(coverage)} com a métrica “{mdef.label}” disponível{coverage < posts.length ? ` (${fmtInt(posts.length - coverage)} em redes que não a fornecem, fora da conta)` : ''} · {mdef.label} {agg === 'media' ? 'médio' : agg === 'mediana' ? 'mediano' : 'total'}: <b>{fmtMetric(totalAgg.value, metric)}</b></p>
-        {net === 'all' && !['er', 'engagement', 'likes', 'comments', 'shares'].includes(metric) && <Note warn>Em “todas as redes”, {mdef.label.toLowerCase()} é calculado só com as redes que a fornecem; compare redes pelo engajamento ou escolha uma rede.</Note>}
       </Panel>
 
       <Section title="Matriz de desempenho por tema e formato" sub="Clique em uma célula para ver os conteúdos que compõem o resultado">

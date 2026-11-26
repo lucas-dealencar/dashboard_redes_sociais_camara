@@ -12,12 +12,12 @@ export interface SectionCfg {
 }
 
 export const SECTIONS: SectionCfg[] = [
+  { id: 'interacoes', title: 'Interações', sub: 'Engajamento básico = curtidas/reações + comentários/respostas + compartilhamentos/republicações', main: 'engagement', others: ['likes', 'comments', 'shares', 'saves'],
+    caveat: 'O engajamento considera curtidas, comentários e compartilhamentos; os salvamentos aparecem separadamente.' },
   { id: 'audiencia', title: 'Audiência', sub: 'Seguidores como vínculos de seguimento, não pessoas únicas', main: 'newF', others: ['followers', 'lost', 'net', 'growth'],
     caveat: 'Lembre que seguidores somados entre redes são vínculos de seguimento, e não pessoas únicas.' },
   { id: 'distribuicao', title: 'Alcance e distribuição', sub: 'Alcance, visualizações e impressões têm definições próprias e não são somados entre si', main: 'reach', others: ['views', 'impressions', 'posts'],
     caveat: 'O alcance somado entre redes não representa audiência única, e visualizações e impressões têm definições próprias.' },
-  { id: 'interacoes', title: 'Interações', sub: 'Engajamento básico = curtidas/reações + comentários/respostas + compartilhamentos/republicações', main: 'engagement', others: ['likes', 'comments', 'shares', 'saves'],
-    caveat: 'O engajamento considera curtidas, comentários e compartilhamentos; os salvamentos aparecem separadamente.' },
   { id: 'eficiencia', title: 'Eficiência e médias por publicação', sub: 'Evitam que o aumento da frequência distorça a leitura', main: 'engPerPost', others: ['er', 'reachPerPost', 'viewsPerPost', 'imprPerPost', 'reachPerFollower'],
     caveat: 'As médias por publicação evitam que o aumento da frequência de postagens distorça a leitura do desempenho.' },
 ];
