@@ -59,7 +59,7 @@ export function Evolution() {
     return { id, def, vals, prevVals, covered, peaks, perNet, missing: plats.filter((p) => !covered.includes(p)) };
   });
 
-  const allPeaks = panels.flatMap((p) => p.peaks.map((i) => ({ metric: p.def.label, i })));
+  const peakSet = new Set(panels.flatMap((p) => p.peaks));
   const sb = selIdx !== null ? buckets[selIdx] : null;
 
   return (
@@ -141,11 +141,10 @@ export function Evolution() {
       <Section title="Investigação de picos e anotações" sub="A coincidência temporal indica hipótese, não comprova causalidade">
         <div className="grid g-main">
           <Panel>
-            {allPeaks.length > 0 && <div className="chips" style={{ marginBottom: 12 }}>{allPeaks.map((pk, k) => <button key={k} className="chip" aria-pressed={selIdx === pk.i} onClick={() => setSelIdx(pk.i)}><i />{pk.metric} · {buckets[pk.i].label}</button>)}</div>}
-            {sb ? <BucketDetail start={sb.start} end={sb.end} onOpenPost={setPostId} /> : <Empty>Nenhum ponto selecionado. Os picos (círculos laranja) são pontos acima de Q3 + 1,5 × amplitude interquartil.</Empty>}
+            {sb ? <BucketDetail start={sb.start} end={sb.end} onOpenPost={setPostId} /> : <Empty>Nenhum ponto selecionado: clique no gráfico. Os picos (círculos laranja) são pontos acima de Q3 + 1,5 × amplitude interquartil.</Empty>}
           </Panel>
           <Panel title="Anotações editoriais" sub="De picos e de publicações, no período e filtros ativos" light>
-            <EditorialNotes buckets={buckets} gran={gran} selIdx={selIdx} onSelect={setSelIdx} peaks={new Set(allPeaks.map((p) => p.i))} postId={postId} onOpenPost={setPostId} />
+            <EditorialNotes buckets={buckets} gran={gran} selIdx={selIdx} onSelect={setSelIdx} peaks={peakSet} postId={postId} onOpenPost={setPostId} />
           </Panel>
         </div>
       </Section>

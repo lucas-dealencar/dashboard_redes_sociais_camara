@@ -146,7 +146,7 @@ export function Legend({ items, off, toggle }: { items: { id: string; label: str
 }
 
 /* ------------------------------------------------------------------ BARRAS HORIZONTAIS */
-export interface HBarRow { key: string; label: string; value: number | null; text: string; color?: string; sub?: string; faded?: boolean; onClick?: () => void; active?: boolean }
+export interface HBarRow { key: string; label: string; value: number | null; text: string; color?: string; sub?: string; tip?: string; faded?: boolean; onClick?: () => void; active?: boolean }
 export function HBars({ rows, max, aria, labelW = 190, rowH = 34, color = '#134e5e' }: { rows: HBarRow[]; max?: number; aria: string; labelW?: number; rowH?: number; color?: string }) {
   const [ref, W] = useWidth();
   const lw = Math.min(labelW, W * 0.4);
@@ -160,6 +160,7 @@ export function HBars({ rows, max, aria, labelW = 190, rowH = 34, color = '#134e
           const y0 = i * rowH + 3, bw = Math.max(r.value ? 2 : 0, ((W - lw - right) * (r.value ?? 0)) / m);
           return (
             <g key={r.key} onClick={r.onClick} style={{ cursor: r.onClick ? 'pointer' : 'default' }} opacity={r.faded ? 0.55 : 1}>
+              {r.tip && <title>{r.tip}</title>}
               <rect x={0} y={y0 - 2} width={W} height={rowH - 2} fill={r.active ? '#e3efee' : 'transparent'} rx={4} />
               {logoOf(r.key)
                 ? <><image href={logoOf(r.key)} x={4} y={y0 + rowH / 2 - 14} width={18} height={18} /><T x={28} y={y0 + rowH / 2 - 1} fill="#2f5258" size={12.5}>{r.label}</T></>
@@ -382,12 +383,12 @@ export function HeatTable({ rows, cols, cell, onCell, selected, minN = 1, rowHea
               <td className="rowh">{r.label}</td>
               {cols.map((c, ci) => {
                 const ce = grid[ri][ci];
-                if (ce.value === null || ce.n < minN) return <td key={c.key} className="cell empty" title={ce.n ? `Amostra pequena: ${ce.n} publicação(ões)` : 'Sem publicações'}>{ce.n ? <>—<small>n={ce.n}</small></> : '—'}</td>;
+                if (ce.value === null || ce.n < minN) return <td key={c.key} className="cell empty" title={ce.n ? `Amostra pequena: ${ce.n} publicação(ões)` : 'Sem publicações'}>—</td>;
                 const rv = grid[ri].filter((x) => x.value !== null && x.n >= minN).map((x) => x.value as number);
                 const a0 = byRow ? Math.min(...rv) : lo, b0 = byRow ? Math.max(...rv) : hi;
                 const col = heatColor(b0 === a0 ? 0.6 : (ce.value - a0) / (b0 - a0));
                 const sel = selected?.r === r.key && selected?.c === c.key;
-                return <td key={c.key} className={`cell${sel ? ' sel' : ''}`} style={{ background: col.bg, color: col.fg }} onClick={() => onCell?.(r.key, c.key)} title={`${ce.n} publicações — clique para ver o conteúdo`}>{ce.text}<small>n={ce.n}</small></td>;
+                return <td key={c.key} className={`cell${sel ? ' sel' : ''}`} style={{ background: col.bg, color: col.fg }} onClick={() => onCell?.(r.key, c.key)} title={`${ce.n} publicações — clique para ver o conteúdo`}>{ce.text}</td>;
               })}
             </tr>
           ))}

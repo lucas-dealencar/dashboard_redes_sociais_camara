@@ -58,7 +58,7 @@ export function Contents() {
     const stat = barStat === 'taxa' ? { m: 'er' as PostMetricId, a: 'total' as Agg } : { m: metric, a: barStat === 'volume' ? 'total' as Agg : (barStat as Agg) };
     const rows = groupBy(posts, keyOf, stat.m, stat.a).map((g) => ({ ...g, v: barStat === 'volume' ? g.n : g.value }));
     return rows.sort((a, b) => (b.v ?? -1) - (a.v ?? -1)).map((g) => ({
-      key: g.key, label: label(g.key), value: g.v, faded: g.n < minN, sub: `n=${g.n}${g.n < minN ? ' · amostra pequena' : ''}`,
+      key: g.key, label: label(g.key), value: g.v, faded: g.n < minN, tip: `${label(g.key)}: ${g.n} publicação(ões)${g.n < minN ? ' · amostra pequena' : ''}`,
       text: g.v === null ? ND : barStat === 'volume' ? fmtInt(g.v) : fmtMetric(g.v, stat.m),
     }));
   };
@@ -105,7 +105,7 @@ export function Contents() {
               <HeatTable rows={themes.map((t) => ({ key: t.id, label: t.name }))} cols={formats.map((f) => ({ key: f.id, label: f.name }))} minN={minN} selected={cell}
                 cell={(r, c) => { const a = aggregate(cellPosts(r, c), metric, agg); return { value: a.nValid ? a.value : null, text: fmtMetric(a.value, metric), n: a.n }; }}
                 onCell={(r, c) => { setCell((cur) => (cur && cur.r === r && cur.c === c ? null : { r, c })); document.getElementById('ranking')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} />
-              <p className="small" style={{ marginTop: 8 }}>Exemplo de leitura: veja, em cada linha, qual formato entrega o maior {mdef.label.toLowerCase()} para o tema. Considere sempre o número de publicações (n) de cada combinação.</p>
+              <p className="small" style={{ marginTop: 8 }}>Exemplo de leitura: veja, em cada linha, qual formato entrega o maior {mdef.label.toLowerCase()} para o tema. Passe o mouse sobre a célula para ver quantas publicações há em cada combinação.</p>
             </>
           ) : <Empty>Sem publicações para os filtros atuais.</Empty>}
         </Panel>
@@ -211,7 +211,7 @@ function VideoSection({ posts }: { posts: Post[] }) {
       {vids.length === 0 ? <Empty>A planilha não traz duração, tempo assistido, retenção nem conclusão de vídeo (etapa 3 da proposta). Nada é estimado.</Empty> : (
         <div className="grid g2">
           <Panel title="Retenção por duração do vídeo" sub={`${fmtInt(vids.length)} vídeos com dado de retenção`}>
-            <Well><Columns aria="Retenção média por faixa de duração" rows={rows.map((r) => ({ key: r.b.id, label: `${r.b.label} (n=${r.n})`, value: r.ret ?? 0, text: fmtPct(r.ret ?? 0, 1) }))} /></Well>
+            <Well><Columns aria="Retenção média por faixa de duração" rows={rows.map((r) => ({ key: r.b.id, label: r.b.label, value: r.ret ?? 0, text: fmtPct(r.ret ?? 0, 1) }))} /></Well>
             <div className="tbl-wrap" style={{ marginTop: 10 }}><table className="tbl"><thead><tr><th>Duração</th><th className="num">Vídeos</th><th className="num">Tempo médio assistido</th><th className="num">Retenção</th><th className="num">Conclusão</th></tr></thead>
               <tbody>{rows.map((r) => <tr key={r.b.id}><td>{r.b.label}</td><td className="num">{r.n}</td><td className="num">{fmtMetric(r.watch, 'watch')}</td><td className="num">{fmtMetric(r.ret, 'retention')}</td><td className="num">{fmtMetric(r.comp, 'completion')}</td></tr>)}</tbody></table></div>
           </Panel>

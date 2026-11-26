@@ -42,7 +42,7 @@ Armadilhas já observadas (validar sempre com amostra real):
 - Seguidores somados são vínculos, não pessoas. Alcance somado entre redes não é audiência única. Não misturar alcance, visualizações e impressões num total sem identificação.
 - **KPI principal** (`config/redes.py`): engajamento em todas as redes (decisão da equipe em nov/2026, no lugar dos KPIs por rede da proposta). Rede sem engajamento na planilha usa substituto sinalizado (alcance → impressões → visualizações).
 - **Benchmark interno**: janela móvel de 90 dias (ajustável), mediana e quartis, **excluindo** o período avaliado; para posts, comparar em idade equivalente. Sinalizar abaixo/dentro/acima do padrão. Em volumes, expor também média/mediana por publicação.
-- Mostrar sempre o `n` de publicações por grupo (tema, formato, célula da matriz) para contextualizar amostras pequenas.
+- Contextualizar amostras pequenas por grupo (tema, formato, célula da matriz): barras esmaecidas, célula "—" e o número de publicações na dica ao passar o mouse e nas exportações. Não escrever `n=x` nos gráficos (decisão da equipe).
 - Coincidência temporal entre pico e acontecimento é hipótese, não causalidade (texto do front).
 - Público: não inferir demografia de um conteúdo a partir da demografia do perfil. A planilha atual não traz dados demográficos; a aba Público depende de nova fonte (etapa 3).
 - Parlamentares/propostas: herdar `OVERRIDES_PARTIDO_UF` e `REGEX_TAG_ARTIFICIAL` da versão anterior, se esses campos voltarem. Preserve os lookarounds da regex.

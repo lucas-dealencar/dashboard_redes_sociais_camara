@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { PLATFORMS } from '../data/catalog';
 import { fmtDMY } from '../domain/dates';
-import { PRESETS, useStore } from '../state/store';
+import { PRESETS, presetRange, useStore } from '../state/store';
 import { FilterBar } from './Layout';
 import { PlatformLogo } from './ui/ui';
 
-const DOWN_TO_SHRINK = 12; // px rolados para baixo que encolhem a barra
-const UP_TO_EXPAND = 30; // px rolados para cima que a reabrem
+const APPEAR_AFTER = 120; // px além do bloco original até a barra aparecer
+const DOWN_TO_SHRINK = 120; // px rolados para baixo que encolhem a barra aberta
+const UP_TO_EXPAND = 260; // px rolados para cima que a abrem (cerca de três "scrolladas")
 
 /**
  * Filtros globais que acompanham a rolagem. Enquanto o bloco original está visível, nada muda;
- * depois dele, uma barra fixa sob a navegação aparece encolhida, e abre ao rolar um pouco para
- * cima ou pela seta. A barra é sobreposta: o conteúdo não "pula" quando ela muda de tamanho.
+ * depois dele, uma barra fixa sob a navegação aparece encolhida, e abre ao rolar para cima ou
+ * pela seta. A barra é sobreposta: o conteúdo não "pula" quando ela muda de tamanho.
  */
 export function StickyFilters() {
   const anchor = useRef<HTMLDivElement>(null);
@@ -31,7 +32,10 @@ export function StickyFilters() {
     const onScroll = () => {
       const y = window.scrollY, d = y - last;
       last = y;
-      const past = !!anchor.current && anchor.current.getBoundingClientRect().bottom <= top;
+      // linha de progresso da leitura na barra encolhida (direto no DOM: não re-renderiza)
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      document.documentElement.style.setProperty('--lido', `${max > 0 ? Math.min(100, (y / max) * 100) : 0}%`);
+      const past = !!anchor.current && anchor.current.getBoundingClientRect().bottom <= top - APPEAR_AFTER;
       setStuck(past);
       if (!past) { setCompact(true); moved = 0; return; }
       if (!d || busy()) return;
@@ -56,7 +60,7 @@ export function StickyFilters() {
             {compact ? <CompactBar onExpand={() => setCompact(false)} /> : (
               <div className="filters-open">
                 <FilterBar />
-                <button type="button" className="filters-toggle" onClick={() => setCompact(true)} aria-label="Encolher filtros" title="Encolher filtros">▴</button>
+                <button type="button" className="filters-toggle" onClick={() => setCompact(true)} aria-label="Encolher filtros" title="Encolher filtros">▴ Encolher</button>
               </div>
             )}
           </div>
@@ -66,20 +70,26 @@ export function StickyFilters() {
   );
 }
 
+/** Barra encolhida: resumo do recorte, troca rápida de período e botão para abrir os filtros. */
 function CompactBar({ onExpand }: { onExpand: () => void }) {
-  const { state } = useStore();
+  const { state, setRange } = useStore();
   const { sel, range, preset } = state;
   const shown = sel.platforms.length ? PLATFORMS.filter((p) => sel.platforms.includes(p.id)) : PLATFORMS;
   const nets = !sel.platforms.length ? `Todas as redes (${PLATFORMS.length})` : shown.length === 1 ? shown[0].name : `${shown.length} de ${PLATFORMS.length} redes`;
   const extra = sel.profileIds.length + sel.themeIds.length + sel.formats.length + (sel.paid !== 'all' ? 1 : 0);
   return (
-    <button type="button" className="filters-compact" onClick={onExpand} aria-label="Expandir filtros" title="Expandir filtros">
-      <span className="dots">{shown.slice(0, 4).map((p) => <PlatformLogo key={p.id} id={p.id} />)}</span>
-      <b>{nets}</b>
-      <span>{PRESETS.find((p) => p.id === preset)?.label ?? 'Personalizado'}</span>
-      <span className="muted">{fmtDMY(range.start)} a {fmtDMY(range.end)}</span>
-      {extra > 0 && <span className="pill req">{extra} filtro{extra > 1 ? 's' : ''}</span>}
-      <span className="chev" aria-hidden>▾</span>
-    </button>
+    <div className="filters-compact" role="group" aria-label="Filtros (resumo)">
+      <button type="button" className="fc-nets" onClick={onExpand} title="Abrir filtros">
+        <span className="dots">{shown.slice(0, 4).map((p) => <PlatformLogo key={p.id} id={p.id} size={22} />)}</span>
+        <b>{nets}</b>
+      </button>
+      <div className="fc-periods" role="group" aria-label="Período">
+        {PRESETS.map((p) => <button type="button" key={p.id} aria-pressed={preset === p.id} onClick={() => setRange(presetRange(p.days), p.id)}>{p.label}</button>)}
+      </div>
+      <span className="fc-dates">{fmtDMY(range.start)} a {fmtDMY(range.end)}</span>
+      <button type="button" className="fc-open" onClick={onExpand} aria-label="Expandir filtros">
+        Filtros{extra > 0 && <em>{extra}</em>}<span className="fc-chev" aria-hidden>▾</span>
+      </button>
+    </div>
   );
 }
