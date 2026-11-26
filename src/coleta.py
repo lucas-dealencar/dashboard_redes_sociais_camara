@@ -299,11 +299,21 @@ def extrair_dados_sheets(do_cache: bool = False) -> pd.DataFrame:
     return bruto
 
 
-@task(name="Extrair dados qualitativos (opcional)", log_prints=True)
+def _baixar_anotacoes() -> list[dict]:
+    """GET na API de anotações (leitura pública, sem credencial)."""
+    import requests
+
+    resposta = requests.get(config.URL_ANOTACOES, params={"acao": "listar"}, timeout=(20, TIMEOUT_REQUISICAO_S))
+    resposta.raise_for_status()
+    corpo = resposta.json()  # página de login/erro em HTML levanta aqui
+    if not corpo.get("ok") or not isinstance(corpo.get("anotacoes"), list):
+        raise ErroColeta(f"A API de anotações respondeu com erro: {corpo.get('erro')}.")
+    return corpo["anotacoes"]
+
+
+@task(name="Extrair anotações (opcional)", log_prints=True)
 def extrair_dados_qualitativos() -> dict:
-    """Anotações editoriais da planilha qualitativa. Levanta erro se indisponível;
-    o flow captura e segue sem ela."""
-    ws = _abrir_aba(
-        config.SPREADSHEET_ID_QUALITATIVO, config.ABA_ANOTACOES, "SPREADSHEET_ID_QUALITATIVO"
-    )
-    return {"anotacoes": ws.get_all_records()}
+    """Anotações por publicação. Levanta erro se indisponível; o flow captura e segue sem elas."""
+    anotacoes = _com_retry(_baixar_anotacoes, "ler anotações", esperas=ESPERAS_S[:3])
+    print(f"Anotações lidas: {len(anotacoes)}.")
+    return {"anotacoes": anotacoes}

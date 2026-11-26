@@ -13,7 +13,7 @@ Escopo funcional: ver a proposta "Dashboard integrado de redes sociais" (nov/202
 3. `src/carga.py`: agrega e grava os JSONs em `docs/dados/` (atômico, `.tmp` + `replace`).
 4. `src/publicacao.py`: commit só de `docs/dados/`, `pull --rebase --autostash` e `push`.
 
-A planilha qualitativa (taxonomia de temas, anotações editoriais, canal em destaque) é **opcional**: se falhar, o flow segue sem ela, com aviso. Mantenha esse comportamento.
+As anotações editoriais (uma por publicação, chave = link normalizado) são **opcionais**: vêm da API do Apps Script (`apps_script/anotacoes.gs`, URL em `config.URL_ANOTACOES` e `frontend/src/data/notes.ts`), gravada pelo front com a senha da equipe numa planilha separada. Se a leitura falhar, o flow segue com aviso e mantém o `anotacoes.json` anterior. A normalização do link existe em três lugares (`_chave_link`, `normalizarLink`, `noteKey`): altere juntos.
 
 ## Fonte de dados (aba `Consolidado`)
 
@@ -58,7 +58,7 @@ Com 80 mil linhas, **nunca** publicar linhas brutas num só arquivo. O front car
 | `benchmark.json` | mediana/quartis por rede × métrica × janela | < 200 KB |
 | `publicacoes/AAAA-MM.json` | posts do mês com métricas e classificação (carregado sob demanda) | < 1 MB cada |
 | `conteudos_agregado.json` | tema × formato × rede: n, soma, média, mediana | < 500 KB |
-| `anotacoes.json` | eventos editoriais (vêm da planilha qualitativa) | < 50 KB |
+| `anotacoes.json` | cópia de reserva das anotações por publicação | < 50 KB |
 | `dicionario_metricas.json` | definição, fonte, unidade, denominador, agregação | < 50 KB |
 
 Janela histórica padrão: 12 meses de posts (`JANELA_MESES_POSTS`); `resumo_diario` pode cobrir todo o histórico. Constantes em `src/config.py`/`carga.py`, não no front-end. Se um arquivo passar do alvo, particione ou reduza colunas.
@@ -135,7 +135,7 @@ Fluxo: `etl-pipeline` constrói → `revisor-etl` audita → `orquestrador-prefe
 - Não leia JSONs de `docs/dados/` inteiros; extraia com `python -c`, `node -e` ou `grep`. Não leia `docs/assets/js/app.js` (minificado); edite a fonte em `frontend/src/`.
 - `publicar_dados_git` faz `push` na `main` de verdade. Não rode `python main.py` sem `--sem-publicar` a menos que o usuário peça.
 - Commits do pipeline: `chore: atualiza dados do dashboard (AAAA-MM-DD HH:MM)`. Manuais: Conventional Commits em português.
-- `SPREADSHEET_ID` e `SPREADSHEET_ID_QUALITATIVO` sobrescrevem os IDs por variável de ambiente. Testes que escrevam em planilha usam cópia, nunca produção.
+- `SPREADSHEET_ID` e `URL_ANOTACOES` sobrescrevem os padrões por variável de ambiente. Testes que escrevam em planilha usam cópia, nunca produção.
 
 ## Etapas (da proposta)
 

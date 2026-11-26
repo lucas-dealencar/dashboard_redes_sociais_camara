@@ -12,9 +12,12 @@ ABA_CONSOLIDADO = "Consolidado"
 GID_CONSOLIDADO = os.getenv("GID_CONSOLIDADO", "1568822592")  # id fixo da aba Consolidado (o `gid` da URL); não muda se renomear
 URL_EXPORTACAO = "https://docs.google.com/spreadsheets/d/{id}/export"
 
-# Planilha qualitativa (opcional): se falhar, o flow segue sem ela.
-SPREADSHEET_ID_QUALITATIVO = os.getenv("SPREADSHEET_ID_QUALITATIVO", "")
-ABA_ANOTACOES = "anotacoes"
+# Anotações por publicação (opcional): API do Apps Script (apps_script/anotacoes.gs). Se falhar,
+# o flow segue e mantém o `anotacoes.json` anterior. O front usa a mesma URL (frontend/src/data/notes.ts).
+URL_ANOTACOES = os.getenv(
+    "URL_ANOTACOES",
+    "https://script.google.com/macros/s/AKfycbzFKF8sgg2cnd-Jo7lau71N11dBbpWS0FDer-jrbTBV-fmOOO5ibQAxMK64gui1UEeG/exec",
+)
 
 # --- Cache (gitignored) --- #
 PASTA_CACHE = BASE_DIR / "cache"

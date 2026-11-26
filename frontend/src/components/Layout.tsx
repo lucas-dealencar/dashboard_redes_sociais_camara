@@ -10,6 +10,7 @@ import { postEngagement } from '../domain/aggregate';
 import { PRESETS, presetRange, useStore, type TabId } from '../state/store';
 import { MultiSelect, Modal, Segmented, Select, Note, PlatformBadge, PlatformDot } from './ui/ui';
 import { Toggle } from './ui/ui';
+import { NoteEditor } from './NoteEditor';
 import { FORMAT_BY_ID } from '../data/catalog';
 import rodape from '../assets/rodape-camara.png';
 
@@ -171,6 +172,7 @@ export function PostDrawer() {
         {row('Projeto?', p.project)}
         {row('Ao vivo?', yn(p.live))}
       </dl>
+      <NoteEditor key={p.id} post={p} />
       <h4 style={{ margin: '16px 0 4px' }}>Desempenho</h4>
       <dl className="kv">
         {row('Alcance', m.reach)}{row('Visualizações', m.views)}{row('Impressões', m.impressions)}
@@ -257,7 +259,6 @@ export function MethodModal() {
           <>
             <Note>Limitações registradas pelo pipeline em <code>manifest.json</code> na última atualização ({fmtGerado(meta.generatedAt)}).</Note>
             <ul style={{ marginTop: 12, paddingLeft: 20, display: 'grid', gap: 6 }}>{meta.limitations.map((l, i) => <li key={i}>{l}</li>)}</ul>
-            {!meta.qualitativeAvailable && <p className="small muted" style={{ marginTop: 10 }}>Planilha qualitativa (anotações editoriais) não configurada: as anotações vêm só do que a equipe registra neste navegador.</p>}
           </>
         )}
       </div>

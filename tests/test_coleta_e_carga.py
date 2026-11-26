@@ -59,3 +59,17 @@ def test_carga_idempotente(tmp_path, monkeypatch, bruto):
     antes = (tmp_path / "resumo_diario.json").read_text(encoding="utf-8")
     carga.salvar_dados_json.fn(transformar_dados.fn(b))
     assert (tmp_path / "resumo_diario.json").read_text(encoding="utf-8") == antes
+
+
+def test_anotacoes_indisponiveis_nao_apagam_o_arquivo_publicado(tmp_path, monkeypatch, bruto):
+    monkeypatch.setattr(config, "PASTA_DADOS", tmp_path)
+    monkeypatch.setattr(config, "PASTA_PUBLICACOES", tmp_path / "publicacoes")
+    b = coleta._uniformizar_tipos(bruto)
+    anotacoes = [{"post_link": "x.com/a/status/1", "anotacao": "ok", "versao": 1}]
+    carga.salvar_dados_json.fn(transformar_dados.fn(b, {"anotacoes": anotacoes}))
+    manifest = carga.salvar_dados_json.fn(transformar_dados.fn(b))
+    assert json.loads((tmp_path / "anotacoes.json").read_text(encoding="utf-8")) == anotacoes
+    assert "anotacoes.json" in manifest["arquivos"]
+
+    carga.salvar_dados_json.fn(transformar_dados.fn(b, {"anotacoes": []}))  # todas excluídas
+    assert json.loads((tmp_path / "anotacoes.json").read_text(encoding="utf-8")) == []

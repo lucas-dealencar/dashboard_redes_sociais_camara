@@ -3,6 +3,7 @@ import { FORMATS, FORMAT_BY_ID, PLATFORM_BY_ID } from '../data/catalog';
 import { activePlatforms, filterPosts, postEngagement } from '../domain/aggregate';
 import { aggregate, groupBy, POST_METRICS, postMetric, erDenominator, type Agg, type PostMetricId } from '../domain/contentStats';
 import { fmtDMY } from '../domain/dates';
+import { noteKey } from '../data/notes';
 import { fmtCompact, fmtInt, fmtPct, fmtSec, ND } from '../domain/format';
 import { useStore } from '../state/store';
 import type { FormatId, PlatformId, Post } from '../types';
@@ -18,7 +19,8 @@ export function fmtMetric(v: number | null, id: PostMetricId): string {
 }
 
 export function Contents() {
-  const { ds, state, setOpenPost } = useStore();
+  const { ds, state, notes, setOpenPost } = useStore();
+  const noteOf = (p: Post) => notes.get(noteKey(p.url));
   const { sel, range } = state;
   const active = activePlatforms(sel).filter((p) => !sel.profileIds.length || sel.profileIds.some((id) => id.startsWith(p + '-')));
   const [netPick, setNetPick] = useState<'all' | PlatformId>('all');
@@ -66,7 +68,7 @@ export function Contents() {
   const statLabel = barStat === 'volume' ? 'Volume de publicações' : barStat === 'taxa' ? 'Taxa de engajamento (agregada)' : `${mdef.label} — ${barStat === 'total' ? 'total' : barStat === 'media' ? 'média por publicação' : 'mediana por publicação'}`;
 
   const cols: Col<Post>[] = [
-    { id: 't', label: 'Publicação', render: (p) => <span><b>{p.title}</b><br /><small className="muted">{ds.profiles.find((x) => x.id === p.profileId)?.name}{p.classification ? ` · ${p.classification}` : ''}{p.live ? ' · ao vivo' : ''}</small></span>, sort: (p) => p.title },
+    { id: 't', label: 'Publicação', render: (p) => <span><b>{p.title}</b>{noteOf(p) && <> <span className="annot" title={noteOf(p)!.text}>Anotação</span></>}<br /><small className="muted">{ds.profiles.find((x) => x.id === p.profileId)?.name}{p.classification ? ` · ${p.classification}` : ''}{p.live ? ' · ao vivo' : ''}</small></span>, sort: (p) => p.title },
     { id: 'r', label: 'Rede', render: (p) => <PlatformBadge id={p.platform} />, sort: (p) => p.platform },
     { id: 'f', label: 'Formato', render: (p) => FORMAT_BY_ID[p.format].name, sort: (p) => p.format },
     { id: 'th', label: 'Tema', render: (p) => themeName(p.themeId), sort: (p) => themeName(p.themeId) },
@@ -79,8 +81,8 @@ export function Contents() {
     { id: 'tx', label: 'Taxa', num: true, render: (p) => { const v = postMetric(p, 'er'); const d = erDenominator(p); return v === null ? <span className="nd">{ND}</span> : <span title={`Base: ${d?.base}`}>{fmtPct(v, 2)}</span>; }, sort: (p) => postMetric(p, 'er') },
     { id: 'l', label: 'Link', render: (p) => <a className="link" href={p.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>abrir</a> },
   ];
-  const exportRank = (): Table => ({ name: 'ranking-publicacoes', headers: ['Data', 'Rede', 'Perfil', 'Descrição', 'Formato', 'Formato na planilha', 'Tema', 'Classificação', 'Projeto?', 'Ao vivo?', 'Alcance', 'Visualizações', 'Impressões', 'Curtidas', 'Comentários', 'Compartilhamentos', 'Salvamentos', 'Cliques no link', 'Engajamento', 'Taxa de engajamento (%)', 'Base da taxa', 'Link'],
-    rows: ranked.map((p) => [p.date, PLATFORM_BY_ID[p.platform].name, ds.profiles.find((x) => x.id === p.profileId)?.name, p.caption, FORMAT_BY_ID[p.format].name, p.nativeFormat, themeName(p.themeId), p.classification, p.project, p.live === null ? null : p.live ? 'Sim' : 'Não', p.metrics.reach, p.metrics.views, p.metrics.impressions, p.metrics.likes, p.metrics.comments, p.metrics.shares, p.metrics.saves, p.metrics.clicks, p.metrics.engagement, p.metrics.er, p.metrics.erBase === 'reach' ? 'alcance' : p.metrics.erBase === 'impressions' ? 'impressões' : p.metrics.erBase === 'views' ? 'visualizações' : null, p.url]) });
+  const exportRank = (): Table => ({ name: 'ranking-publicacoes', headers: ['Data', 'Rede', 'Perfil', 'Descrição', 'Formato', 'Formato na planilha', 'Tema', 'Classificação', 'Projeto?', 'Ao vivo?', 'Alcance', 'Visualizações', 'Impressões', 'Curtidas', 'Comentários', 'Compartilhamentos', 'Salvamentos', 'Cliques no link', 'Engajamento', 'Taxa de engajamento (%)', 'Base da taxa', 'Link', 'Anotação'],
+    rows: ranked.map((p) => [p.date, PLATFORM_BY_ID[p.platform].name, ds.profiles.find((x) => x.id === p.profileId)?.name, p.caption, FORMAT_BY_ID[p.format].name, p.nativeFormat, themeName(p.themeId), p.classification, p.project, p.live === null ? null : p.live ? 'Sim' : 'Não', p.metrics.reach, p.metrics.views, p.metrics.impressions, p.metrics.likes, p.metrics.comments, p.metrics.shares, p.metrics.saves, p.metrics.clicks, p.metrics.engagement, p.metrics.er, p.metrics.erBase === 'reach' ? 'alcance' : p.metrics.erBase === 'impressions' ? 'impressões' : p.metrics.erBase === 'views' ? 'visualizações' : null, p.url, noteOf(p)?.text ?? null]) });
   const exportMatrix = (): Table => ({ name: 'matriz-tema-formato', headers: ['Tema', ...formats.flatMap((f) => [`${f.name} — ${mdef.label}`, `${f.name} — n`])],
     rows: themes.map((t) => [t.name, ...formats.flatMap((f) => { const a = aggregate(cellPosts(t.id, f.id), metric, agg); return [a.value, a.n]; })]) });
 

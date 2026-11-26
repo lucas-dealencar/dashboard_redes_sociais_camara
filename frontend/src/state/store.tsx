@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { Annotation, AnnotationCategory, Dataset, Post, Theme } from '../types';
+import type { Dataset, Post, Theme } from '../types';
+import { useNotes } from './useNotes';
 import { EMPTY_SELECTION, type Selection } from '../domain/aggregate';
-import { LAST_DAY, dayOf, isoOf, type Range } from '../domain/dates';
+import { LAST_DAY, type Range } from '../domain/dates';
 import { load, save } from '../utils/storage';
 
 export type TabId = 'visao' | 'evolucao' | 'conteudos' | 'publico';
@@ -28,9 +29,9 @@ interface Ctx {
   setBench: (d: number) => void;
   setTab: (t: TabId) => void;
   resetFilters: () => void;
-  annotations: Annotation[];
-  addAnnotation: (a: { day: number; label: string; category: AnnotationCategory; note?: string }) => void;
-  removeAnnotation: (id: string) => void;
+  notes: ReturnType<typeof useNotes>['notes'];
+  notesStatus: ReturnType<typeof useNotes>['notesStatus'];
+  writeNote: ReturnType<typeof useNotes>['writeNote'];
   taxonomy: TaxonomyState;
   renameTheme: (id: string, name: string) => void;
   addTheme: (name: string) => void;
@@ -55,21 +56,18 @@ export const PRESETS = [
   { id: '180', label: '180 dias', days: 180 },
   { id: '365', label: '12 meses', days: 365 },
 ];
-const ANN_KEY = 'camara.annotations.v2';
 const TAX_KEY = 'camara.taxonomy.v3';
 
 export const presetRange = (days: number): Range => ({ start: Math.max(0, LAST_DAY - days + 1), end: LAST_DAY });
 
 export function StoreProvider({ base, children }: { base: Dataset; children: ReactNode }) {
   const [state, setState] = useState<AppState>({ sel: EMPTY_SELECTION, range: presetRange(90), preset: '90', benchDays: base.meta.benchDays, tab: 'visao' });
-  // anotações locais guardam a data ISO: o índice do dia muda quando a janela de 12 meses avança
-  const [custom, setCustom] = useState<Annotation[]>(() => load<(Annotation & { iso?: string })[]>(ANN_KEY, []).filter((a) => a.iso).map((a) => ({ ...a, day: dayOf(a.iso as string) })));
+  const { notes, notesStatus, writeNote } = useNotes(base.notes);
   // reclassificações locais de tema, por link da publicação
   const [taxonomy, setTaxonomy] = useState<TaxonomyState>(() => load<TaxonomyState>(TAX_KEY, { renames: {}, extra: [], postTheme: {} }));
   const [openPost, setOpenPost] = useState<Post | null>(null);
   const [methodOpen, setMethodOpen] = useState(false);
 
-  useEffect(() => save(ANN_KEY, custom.map((a) => ({ ...a, iso: isoOf(a.day) }))), [custom]);
   useEffect(() => save(TAX_KEY, taxonomy), [taxonomy]);
 
   // dataset derivado: aplica renomeações, novos temas e reclassificações da equipe
@@ -82,8 +80,6 @@ export function StoreProvider({ base, children }: { base: Dataset; children: Rea
     return { ...base, themes, posts };
   }, [base, taxonomy]);
 
-  const annotations = useMemo<Annotation[]>(() => [...base.annotations, ...custom].sort((a, b) => a.day - b.day), [base, custom]);
-
   const setSel = useCallback((p: Partial<Selection>) => setState((s) => {
     const sel = { ...s.sel, ...p };
     if (p.platforms) sel.profileIds = sel.profileIds.filter((id) => !sel.platforms.length || sel.platforms.includes(id.split('-')[0] as never));
@@ -95,9 +91,7 @@ export function StoreProvider({ base, children }: { base: Dataset; children: Rea
     setBench: (benchDays) => setState((s) => ({ ...s, benchDays })),
     setTab: (tab) => { setState((s) => ({ ...s, tab })); window.scrollTo({ top: 0 }); },
     resetFilters: () => setState((s) => ({ ...s, sel: EMPTY_SELECTION })),
-    annotations,
-    addAnnotation: (a) => setCustom((c) => [...c, { id: `c${Date.now()}`, custom: true, ...a }]),
-    removeAnnotation: (id) => setCustom((c) => c.filter((x) => x.id !== id)),
+    notes, notesStatus, writeNote,
     taxonomy,
     renameTheme: (id, name) => setTaxonomy((t) => ({ ...t, renames: { ...t.renames, [id]: name } })),
     addTheme: (name) => setTaxonomy((t) => ({ ...t, extra: [...t.extra, { id: `tx${t.extra.length + 1}-${Date.now() % 100000}`, name }] })),

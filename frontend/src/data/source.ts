@@ -1,8 +1,9 @@
 import type {
-  AnnotationCategory, AnnotationSeed, Dataset, DictEntry, FormatId, NetworkCoverage, NetworkKpi, PlatformId, Post, Profile, Theme,
+  Dataset, DictEntry, FormatId, NetworkCoverage, NetworkKpi, PlatformId, Post, Profile, Theme,
 } from '../types';
 import { configurePlatforms, FORMAT_ID_BY_NAME, NO_THEME, PLATFORM_ID_BY_NAME } from './catalog';
 import { configureCalendar, dayOf } from '../domain/dates';
+import { parseNotes } from './notes';
 
 /**
  * Contrato de fonte de dados. As telas só conhecem `Dataset`.
@@ -75,33 +76,6 @@ function titleOf(desc: string | null, rede: string, formato: string): string {
   const first = (desc ?? '').split(/\n+/).map((s) => s.trim()).find(Boolean);
   if (!first) return `${rede} · ${formato} (sem descrição)`;
   return first.length > 110 ? `${first.slice(0, 107).trimEnd()}…` : first;
-}
-
-/** Datas em ISO (AAAA-MM-DD) ou dd/mm/aaaa → ISO; senão null. */
-function isoDate(v: unknown): string | null {
-  if (typeof v !== 'string') return null;
-  const s = v.trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null;
-}
-const CATS: AnnotationCategory[] = ['Votação', 'Campanha', 'Evento', 'Político', 'Outro'];
-
-/** Anotações da planilha qualitativa (registros livres: data, categoria, titulo/descricao, nota). */
-function parseAnnotations(raw: unknown): AnnotationSeed[] {
-  if (!Array.isArray(raw)) return [];
-  const out: AnnotationSeed[] = [];
-  raw.forEach((r, i) => {
-    if (!r || typeof r !== 'object') return;
-    const o = Object.fromEntries(Object.entries(r as Record<string, unknown>).map(([k, v]) => [slug(k), v]));
-    const iso = isoDate(o.data);
-    const label = String(o.titulo ?? o.descricao ?? o.evento ?? o.label ?? '').trim();
-    if (!iso || !label) return;
-    const catRaw = String(o.categoria ?? 'Outro').trim();
-    const category = CATS.find((c) => slug(c) === slug(catRaw)) ?? 'Outro';
-    out.push({ id: `q${i}`, day: dayOf(iso), label, category });
-  });
-  return out;
 }
 
 export class PipelineDataSource implements DataSource {
@@ -186,9 +160,9 @@ export class PipelineDataSource implements DataSource {
         totalRows: posts.length, limitations: manifest.limitacoes ?? [], dictionary,
         coverage: bench.cobertura ?? {}, networkKpi: bench.kpi_por_rede ?? {},
         benchDays: bench.janela_dias || 90, benchAlternatives: [...new Set([...alts, bench.janela_dias || 90])].sort((a, b) => a - b),
-        hasPaid: paidSeen, hasAudience: false, qualitativeAvailable: !!manifest.qualitativo_disponivel,
+        hasPaid: paidSeen, hasAudience: false,
       },
-      profiles, themes, posts, account: [], editorials: [], annotations: parseAnnotations(annRaw), audience: [], generatedAt: manifest.gerado_em,
+      profiles, themes, posts, account: [], editorials: [], notes: parseNotes(annRaw), audience: [], generatedAt: manifest.gerado_em,
     };
   }
 }

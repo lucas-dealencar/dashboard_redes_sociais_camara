@@ -98,18 +98,12 @@ export interface Editorial {
   day: number;
 }
 
-export interface AnnotationSeed {
-  id: string;
-  day: number;
-  label: string;
-  category: AnnotationCategory;
-}
-
-export type AnnotationCategory = 'Votação' | 'Campanha' | 'Evento' | 'Político' | 'Outro';
-
-export interface Annotation extends AnnotationSeed {
-  note?: string;
-  custom?: boolean;
+/** Anotação editorial de uma publicação (`key` = link normalizado). */
+export interface PostNote {
+  key: string;
+  text: string;
+  version: number;
+  updatedAt: string; // ISO
 }
 
 export type AudienceKind = 'followers' | 'reached' | 'engaged';
@@ -176,7 +170,6 @@ export interface DatasetMeta {
   benchAlternatives: number[];
   hasPaid: boolean;
   hasAudience: boolean;
-  qualitativeAvailable: boolean;
 }
 
 export interface Dataset {
@@ -186,7 +179,8 @@ export interface Dataset {
   posts: Post[];
   account: AccountDay[];
   editorials: Editorial[];
-  annotations: AnnotationSeed[];
+  /** cópia publicada pelo pipeline, usada se a API de anotações não responder */
+  notes: PostNote[];
   audience: PlatformAudience[];
   generatedAt: string;
 }

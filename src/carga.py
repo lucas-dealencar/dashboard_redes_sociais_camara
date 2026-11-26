@@ -109,7 +109,11 @@ def salvar_dados_json(tabelas: dict) -> dict:
         pasta / "conteudos_agregado.json", _tabela(tabelas["conteudos"])
     )
     qual = tabelas.get("qualitativo") or {}
-    tamanhos["anotacoes.json"] = _gravar_json(pasta / "anotacoes.json", qual.get("anotacoes", []))
+    arquivo_anotacoes = pasta / "anotacoes.json"
+    if "anotacoes" not in qual and arquivo_anotacoes.exists():
+        tamanhos["anotacoes.json"] = arquivo_anotacoes.stat().st_size  # fonte indisponível: não apaga
+    else:
+        tamanhos["anotacoes.json"] = _gravar_json(arquivo_anotacoes, qual.get("anotacoes", []))
     dicionario = json.loads((config.BASE_DIR / "config" / "dicionario_metricas.json").read_text(encoding="utf-8"))
     tamanhos["dicionario_metricas.json"] = _gravar_json(pasta / "dicionario_metricas.json", dicionario)
     particoes = _gravar_particoes(base)

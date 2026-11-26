@@ -23,13 +23,13 @@ CRON_DIARIO = Cron("30 11 * * *", timezone="America/Sao_Paulo")
 def atualizar_dashboard(publicar: bool = True, do_cache: bool = False) -> dict:
     bruto = extrair_dados_sheets(do_cache=do_cache)
     qualitativo = None
-    if do_cache or not config.SPREADSHEET_ID_QUALITATIVO:
-        print("Planilha qualitativa não configurada; seguindo sem anotações.")
+    if do_cache or not config.URL_ANOTACOES:
+        print("Anotações não consultadas; mantendo o anotacoes.json anterior.")
     else:
-        try:  # planilha qualitativa é opcional: se falhar, segue sem ela
+        try:  # anotações são opcionais: se falhar, segue sem elas
             qualitativo = extrair_dados_qualitativos()
         except Exception as erro:
-            print(f"Aviso: análise qualitativa indisponível ({erro}); seguindo sem ela.")
+            print(f"Aviso: anotações indisponíveis ({erro}); mantendo o anotacoes.json anterior.")
     tabelas = transformar_dados(bruto, qualitativo)
     manifest = salvar_dados_json(tabelas)
     if publicar:
