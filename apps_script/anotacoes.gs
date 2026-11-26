@@ -8,7 +8,7 @@
  *   `versao` é a versão que o usuário viu (0 = o post ainda não tinha anotação).
  *   Se outra pessoa gravou antes, a resposta é { ok:false, erro:"conflito", atual } e nada é gravado.
  *
- * Uma anotação por post. A chave é o link normalizado com as mesmas regras de
+ * Uma anotação por post ou por pico (chave `pico:AAAA-MM-DD:AAAA-MM-DD`). A chave do post é o link normalizado com as mesmas regras de
  * `_chave_link` (src/transformacao/publicacoes.py): mantenha as duas em sincronia.
  * Exclusão só marca `excluido` (a linha e o texto ficam na planilha, recuperáveis).
  *
@@ -181,8 +181,8 @@ function normalizarLink(valor) {
 
 function validarLink_(valor) {
   const bruto = String(valor == null ? '' : valor).trim();
-  // URL do post ou código numérico de Stories; datas (registros de seguidores) não são posts
-  if (!bruto || bruto.length > MAX_LINK || !/^(https?:\/\/\S+|\d{15,20})$/i.test(bruto)) {
+  // URL do post, código numérico de Stories ou pico; datas soltas (registros de seguidores) não são posts
+  if (!bruto || bruto.length > MAX_LINK || !/^(https?:\/\/\S+|\d{15,20}|pico:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2})$/i.test(bruto)) {
     throw erro_('link_invalido', 'Link do post inválido.');
   }
   return normalizarLink(bruto);

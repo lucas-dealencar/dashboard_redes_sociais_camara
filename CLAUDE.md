@@ -13,7 +13,7 @@ Escopo funcional: ver a proposta "Dashboard integrado de redes sociais" (nov/202
 3. `src/carga.py`: agrega e grava os JSONs em `docs/dados/` (atômico, `.tmp` + `replace`).
 4. `src/publicacao.py`: commit só de `docs/dados/`, `pull --rebase --autostash` e `push`.
 
-As anotações editoriais (uma por publicação, chave = link normalizado) são **opcionais**: vêm da API do Apps Script (`apps_script/anotacoes.gs`, URL em `config.URL_ANOTACOES` e `frontend/src/data/notes.ts`), gravada pelo front com a senha da equipe numa planilha separada. Se a leitura falhar, o flow segue com aviso e mantém o `anotacoes.json` anterior. A normalização do link existe em três lugares (`_chave_link`, `normalizarLink`, `noteKey`): altere juntos.
+As anotações editoriais (uma por publicação, chave = link normalizado; e uma por pico, chave `pico:início:fim` do dia, semana ou mês) são **opcionais**: vêm da API do Apps Script (`apps_script/anotacoes.gs`, URL em `config.URL_ANOTACOES` e `frontend/src/data/notes.ts`), gravada pelo front com a senha da equipe numa planilha separada. Se a leitura falhar, o flow segue com aviso e mantém o `anotacoes.json` anterior. A normalização do link existe em três lugares (`_chave_link`, `normalizarLink`, `noteKey`): altere juntos.
 
 ## Fonte de dados (aba `Consolidado`)
 

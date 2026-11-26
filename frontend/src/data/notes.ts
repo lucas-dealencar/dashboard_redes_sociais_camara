@@ -1,4 +1,6 @@
 import type { PostNote } from '../types';
+import { isoOf, weekStart } from '../domain/dates';
+import type { Granularity } from '../domain/series';
 
 /**
  * Anotações por publicação (uma por post), gravadas numa planilha pela API do Apps Script
@@ -18,8 +20,25 @@ export function noteKey(link: string): string {
   return s.replace(/\/+$/, '');
 }
 
-/** O script só aceita URL de post ou o código numérico de Stories. */
-export const canAnnotate = (link: string) => link.length <= 500 && /^(https?:\/\/\S+|\d{15,20})$/i.test(link.trim());
+/** O script só aceita URL de post, o código numérico de Stories ou a chave de um pico. */
+export const canAnnotate = (link: string) => link.length <= 500 && /^(https?:\/\/\S+|\d{15,20}|pico:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2})$/i.test(link.trim());
+
+/**
+ * Chave de uma anotação de pico: o período de calendário inteiro (dia, semana ou mês), sem o recorte
+ * do filtro de datas, para a mesma anotação ser reencontrada quando o usuário muda o período.
+ */
+export function peakKey(day: number, gran: Granularity): string {
+  if (gran === 'dia') return `pico:${isoOf(day)}:${isoOf(day)}`;
+  if (gran === 'semana') return `pico:${isoOf(weekStart(day))}:${isoOf(weekStart(day) + 6)}`;
+  const [y, m] = isoOf(day).split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return `pico:${last.slice(0, 8)}01:${last}`;
+}
+
+export function parsePeakKey(key: string): { start: string; end: string } | null {
+  const m = key.match(/^pico:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})$/);
+  return m ? { start: m[1], end: m[2] } : null;
+}
 
 interface RawNote { post_link: string; anotacao: string; versao: number; atualizado_em: string }
 

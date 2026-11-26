@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { PLATFORM_BY_ID, PLATFORMS } from '../data/catalog';
 import { activePlatforms, buildTable, filterPosts, postEngagement } from '../domain/aggregate';
 import { benchmarkFor, computeKpi, evalKpi, KPI_BY_ID, principalId, type KpiId } from '../domain/kpis';
-import { fmtDM, fmtDMY, prevRange, rangeLen } from '../domain/dates';
+import { fmtDM, fmtDMY, prevRange, rangeLen, dayOf } from '../domain/dates';
 import { fmtCompact, fmtDeltaPP, fmtDeltaPct, fmtInt, fmtPct, ND } from '../domain/format';
 import { bucketIndexOfDay, bucketValues, detectPeaks, EVO_METRICS, makeBuckets, type EvoMetric, type Granularity } from '../domain/series';
 import { postMetric } from '../domain/contentStats';
 import { FORMAT_BY_ID } from '../data/catalog';
 import { useStore } from '../state/store';
-import { noteKey } from '../data/notes';
+import { noteKey, parsePeakKey } from '../data/notes';
+import { EditorialNotes } from '../components/EditorialNotes';
 import type { PlatformId } from '../types';
 import { Section, Panel, Well, Note, Select, Segmented, Toggle, ExportButtons, PlatformBadge, Empty } from '../components/ui/ui';
 import { Legend, LineChart, PngButton, RangeBar, type LineSeries } from '../components/charts/charts';
@@ -19,7 +20,7 @@ const fmtFor = (f: 'compact' | 'pct') => (f === 'pct' ? (v: number) => fmtPct(v,
 const short = (s: string) => (s.length > 80 ? `${s.slice(0, 77)}…` : s);
 
 export function Evolution() {
-  const { ds, state, notes, notesStatus, setOpenPost } = useStore();
+  const { ds, state, notes } = useStore();
   const { sel, range } = state;
   const autoGran: Granularity = rangeLen(range) <= 45 ? 'dia' : rangeLen(range) <= 200 ? 'semana' : 'mes';
   const [granPick, setGranPick] = useState<Granularity | null>(null);
@@ -39,7 +40,10 @@ export function Evolution() {
   const annotated = useMemo(() => filterPosts(ds, sel, range.start, range.end)
     .flatMap((post) => { const note = notes.get(noteKey(post.url)); return note ? [{ post, note }] : []; })
     .sort((a, b) => a.post.day - b.post.day), [ds, sel, range, notes]);
-  const markers = useMemo(() => annotated.map((a) => ({ index: bucketIndexOfDay(buckets, a.post.day), label: `${fmtDM(a.post.day)} · ${short(a.note.text)}` })).filter((m) => m.index >= 0), [annotated, buckets]);
+  const markers = useMemo(() => [
+    ...peakNotesIn(notes, range.start, range.end).map((n) => ({ index: bucketIndexOfDay(buckets, Math.max(n.start, range.start)), label: `Pico ${fmtDM(n.start)} · ${short(n.text)}` })),
+    ...annotated.map((a) => ({ index: bucketIndexOfDay(buckets, a.post.day), label: `${fmtDM(a.post.day)} · ${short(a.note.text)}` })),
+  ].filter((m) => m.index >= 0), [annotated, notes, range, buckets]);
 
   const panels = metrics.map((id) => {
     const def = EVO_METRICS.find((m) => m.id === id)!;
@@ -123,15 +127,8 @@ export function Evolution() {
             {allPeaks.length > 0 && <div className="chips" style={{ marginBottom: 12 }}>{allPeaks.map((pk, k) => <button key={k} className="chip" aria-pressed={selIdx === pk.i} onClick={() => setSelIdx(pk.i)}><i />{pk.metric} · {buckets[pk.i].label}</button>)}</div>}
             {sb ? <BucketDetail start={sb.start} end={sb.end} /> : <Empty>Nenhum ponto selecionado. Os picos (círculos laranja) são pontos acima de Q3 + 1,5 × amplitude interquartil.</Empty>}
           </Panel>
-          <Panel title="Anotações editoriais" sub="Uma por publicação, no período e filtros ativos" light>
-            <div className="grid" style={{ gap: 8, maxHeight: 420, overflow: 'auto' }}>
-              {annotated.map(({ post, note }) => (
-                <div key={post.id} className="post-item"><span className="flex between"><PlatformBadge id={post.platform} /><span className="small muted">{fmtDMY(post.day)}</span></span><span className="t">{note.text}</span><span className="small muted">{post.title}</span>
-                  <span className="flex"><button className="btn sm" onClick={() => setOpenPost(post)}>Abrir publicação</button><button className="btn sm" onClick={() => setSelIdx(bucketIndexOfDay(buckets, post.day))}>Ver no gráfico</button></span></div>
-              ))}
-              {!annotated.length && <Empty>Sem anotações no período.</Empty>}
-            </div>
-            <p className="small muted" style={{ marginTop: 8 }}>{notesStatus === 'reserva' ? 'Serviço de anotações indisponível: exibindo a última cópia publicada.' : 'Para anotar, abra uma publicação aqui ou na aba Conteúdos.'}</p>
+          <Panel title="Anotações editoriais" sub="De picos e de publicações, no período e filtros ativos" light>
+            <EditorialNotes buckets={buckets} gran={gran} selIdx={selIdx} onSelect={setSelIdx} peaks={new Set(allPeaks.map((p) => p.i))} />
           </Panel>
         </div>
       </Section>
@@ -143,19 +140,30 @@ export function Evolution() {
 }
 
 
+/** Anotações de pico cujo período cruza [start, end]. */
+function peakNotesIn(notes: ReturnType<typeof useStore>['notes'], start: number, end: number) {
+  return [...notes.values()].flatMap((n) => {
+    const p = parsePeakKey(n.key);
+    if (!p) return [];
+    const s = dayOf(p.start);
+    return s <= end && dayOf(p.end) >= start ? [{ start: s, text: n.text }] : [];
+  });
+}
+
 function BucketDetail({ start, end }: { start: number; end: number }) {
   const { ds, state, notes, setOpenPost } = useStore();
   const { sel } = state;
   const total = buildTable(ds, sel);
   const posts = filterPosts(ds, sel, start, end).sort((a, b) => (postEngagement(b) ?? -1) - (postEngagement(a) ?? -1)).slice(0, 8);
   const items = EVO_METRICS.filter((m) => m.id !== 'followers').map((m) => ({ m, v: evalKpi(m.kpi, total, start, end) }));
+  const peakAn = peakNotesIn(notes, start, end).map((n) => `Pico · ${short(n.text)}`);
   const an = filterPosts(ds, sel, start, end).flatMap((p) => { const n = notes.get(noteKey(p.url)); return n ? [`${fmtDM(p.day)} · ${short(n.text)}`] : []; });
   return (
     <>
       <div className="grid g4" style={{ marginBottom: 12 }}>
         {items.slice(0, 4).map(({ m, v }) => <div key={m.id} className="kpi" style={{ padding: '10px 12px' }}><div className="k-label">{m.label}</div><div className="k-value" style={{ fontSize: 24 }}>{v === null ? ND : fmtFor(m.fmt)(v)}</div></div>)}
       </div>
-      {an.length > 0 && <Note><b>Anotações no período:</b> {an.join(' | ')}</Note>}
+      {peakAn.length + an.length > 0 && <Note><b>Anotações no período:</b> {[...peakAn, ...an].join(' | ')}</Note>}
       <h4 style={{ margin: '14px 0 8px' }}>Publicações relevantes (por engajamento)</h4>
       <div className="grid" style={{ gap: 8 }}>
         {posts.map((p) => (

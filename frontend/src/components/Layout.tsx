@@ -172,7 +172,7 @@ export function PostDrawer() {
         {row('Projeto?', p.project)}
         {row('Ao vivo?', yn(p.live))}
       </dl>
-      <NoteEditor key={p.id} post={p} />
+      <NoteEditor key={p.id} link={p.url} title="Anotação" />
       <h4 style={{ margin: '16px 0 4px' }}>Desempenho</h4>
       <dl className="kv">
         {row('Alcance', m.reach)}{row('Visualizações', m.views)}{row('Impressões', m.impressions)}

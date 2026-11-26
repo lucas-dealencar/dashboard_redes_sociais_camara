@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { canAnnotate, MAX_NOTE, noteKey } from '../data/notes';
 import { useStore } from '../state/store';
-import type { Post } from '../types';
 import { Note } from './ui/ui';
 
 const PASS_KEY = 'camara.notes.senha'; // sessionStorage: some ao fechar a aba
@@ -13,10 +12,10 @@ const fmtWhen = (iso: string) => {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 };
 
-/** Anotação única de uma publicação. Use `key={post.id}` para não levar o rascunho a outro post. */
-export function NoteEditor({ post }: { post: Post }) {
+/** Anotação única de uma publicação ou de um pico (`link`). Use `key` para não levar o rascunho a outro alvo. */
+export function NoteEditor({ link, title }: { link: string; title?: string }) {
   const { notes, notesStatus, writeNote } = useStore();
-  const note = notes.get(noteKey(post.url)) ?? null;
+  const note = notes.get(noteKey(link)) ?? null;
   const version = note?.version ?? 0;
   // rascunho guarda a versão em que a edição começou: a atualização automática não pode mascarar um conflito
   const [draft, setDraft] = useState<{ text: string; base: number } | null>(null);
@@ -26,14 +25,17 @@ export function NoteEditor({ post }: { post: Post }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const editable = notesStatus === 'online' && canAnnotate(post.url);
+  const editable = notesStatus === 'online' && canAnnotate(link);
   const editing = draft !== null;
   const outdated = editing && draft.base !== version;
+
+  // a senha pode ter sido digitada em outro editor da mesma tela: relê ao abrir
+  const syncPass = () => { const saved = readPass(); if (saved) setPassword(saved); setAskPass(!saved); setError(null); };
 
   const send = async (action: 'salvar' | 'excluir') => {
     setBusy(true);
     setError(null);
-    const r = await writeNote({ action, link: post.url, password, text: draft?.text.trim(), version: action === 'salvar' && draft ? draft.base : version });
+    const r = await writeNote({ action, link, password, text: draft?.text.trim(), version: action === 'salvar' && draft ? draft.base : version });
     setBusy(false);
     if (r.ok) {
       keepPass(password);
@@ -54,8 +56,8 @@ export function NoteEditor({ post }: { post: Post }) {
   );
 
   return (
-    <section aria-label="Anotação da publicação">
-      <h4 style={{ margin: '16px 0 6px' }}>Anotação</h4>
+    <section aria-label="Anotação">
+      {title && <h4 style={{ margin: '16px 0 6px' }}>{title}</h4>}
       {note ? (
         <>
           {editing && <p className="small muted" style={{ margin: '0 0 2px' }}>Texto salvo atualmente:</p>}
@@ -66,7 +68,7 @@ export function NoteEditor({ post }: { post: Post }) {
 
       {notesStatus === 'carregando' && <p className="small muted">Carregando anotações…</p>}
       {notesStatus === 'reserva' && <Note warn>Serviço de anotações indisponível: exibindo a última cópia publicada, somente leitura.</Note>}
-      {!canAnnotate(post.url) && <p className="small muted">Esta publicação não tem um link válido na planilha e não aceita anotação.</p>}
+      {!canAnnotate(link) && <p className="small muted">Esta publicação não tem um link válido na planilha e não aceita anotação.</p>}
 
       {editable && !editing && (
         <div className="grid" style={{ gap: 8 }}>
@@ -80,8 +82,8 @@ export function NoteEditor({ post }: { post: Post }) {
             </>
           ) : (
             <div className="flex">
-              <button className="btn sm" onClick={() => { setError(null); setDraft({ text: note?.text ?? '', base: version }); }}>{note ? 'Editar' : 'Adicionar anotação'}</button>
-              {note && <button className="btn sm" onClick={() => { setError(null); setConfirmDelete(true); }}>Excluir</button>}
+              <button className="btn sm" onClick={() => { syncPass(); setDraft({ text: note?.text ?? '', base: version }); }}>{note ? 'Editar' : 'Adicionar anotação'}</button>
+              {note && <button className="btn sm" onClick={() => { syncPass(); setConfirmDelete(true); }}>Excluir</button>}
             </div>
           )}
         </div>
