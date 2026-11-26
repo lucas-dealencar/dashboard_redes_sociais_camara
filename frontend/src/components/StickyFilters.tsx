@@ -7,12 +7,11 @@ import { PlatformLogo } from './ui/ui';
 
 const APPEAR_AFTER = 120; // px além do bloco original até a barra aparecer
 const DOWN_TO_SHRINK = 120; // px rolados para baixo que encolhem a barra aberta
-const UP_TO_EXPAND = 260; // px rolados para cima que a abrem (cerca de três "scrolladas")
 
 /**
  * Filtros globais que acompanham a rolagem. Enquanto o bloco original está visível, nada muda;
- * depois dele, uma barra fixa sob a navegação aparece encolhida, e abre ao rolar para cima ou
- * pela seta. A barra é sobreposta: o conteúdo não "pula" quando ela muda de tamanho.
+ * depois dele, uma barra fixa sob a navegação aparece encolhida, e só abre por clique (a rolagem
+ * para baixo a encolhe de novo). A barra é sobreposta: o conteúdo não "pula" quando ela muda de tamanho.
  */
 export function StickyFilters() {
   const anchor = useRef<HTMLDivElement>(null);
@@ -42,7 +41,6 @@ export function StickyFilters() {
       if (Math.sign(d) !== Math.sign(moved)) moved = 0;
       moved += d;
       if (moved > DOWN_TO_SHRINK) setCompact(true);
-      else if (moved < -UP_TO_EXPAND) setCompact(false);
     };
     const onResize = () => { measure(); onScroll(); };
     onResize();
