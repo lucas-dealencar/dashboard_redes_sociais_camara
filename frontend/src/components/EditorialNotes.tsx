@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { filterPosts } from '../domain/aggregate';
 import { dayOf, fmtDMY } from '../domain/dates';
 import { bucketIndexOfDay, type Bucket, type Granularity } from '../domain/series';
@@ -6,6 +6,7 @@ import { noteKey, parsePeakKey, peakKey } from '../data/notes';
 import { useStore } from '../state/store';
 import type { Post } from '../types';
 import { NoteEditor } from './NoteEditor';
+import { PostDetail } from './Layout';
 import { Empty, PlatformBadge, Segmented, Select } from './ui/ui';
 
 const fmtPeriod = (start: number, end: number) => (start === end ? fmtDMY(start) : `${fmtDMY(start)} a ${fmtDMY(end)}`);
@@ -17,15 +18,18 @@ interface Props {
   onSelect: (i: number | null) => void;
   /** índices de `buckets` com pico detectado nas métricas exibidas */
   peaks: Set<number>;
+  /** publicação aberta dentro do painel (null = lista de anotações) */
+  postId: string | null;
+  onOpenPost: (id: string | null) => void;
 }
 
 /** Painel "Anotações editoriais": anotações de picos (períodos) e de publicações, em separado. */
-export function EditorialNotes({ buckets, gran, selIdx, onSelect, peaks }: Props) {
-  const { ds, state, notes, notesStatus, setOpenPost } = useStore();
+export function EditorialNotes({ buckets, gran, selIdx, onSelect, peaks, postId, onOpenPost }: Props) {
+  const { ds, state, notes, notesStatus } = useStore();
   const { sel, range } = state;
   const [kind, setKind] = useState<'picos' | 'posts'>('picos');
   const [search, setSearch] = useState('');
-  const [pickedId, setPickedId] = useState<string | null>(null);
+  const top = useRef<HTMLDivElement>(null);
 
   const posts = useMemo(() => filterPosts(ds, sel, range.start, range.end), [ds, sel, range]);
   const postNotes = useMemo(() => posts.filter((p) => notes.has(noteKey(p.url))).sort((a, b) => a.day - b.day), [posts, notes]);
@@ -39,7 +43,9 @@ export function EditorialNotes({ buckets, gran, selIdx, onSelect, peaks }: Props
 
   const bucket = selIdx !== null ? buckets[selIdx] ?? null : null;
   const bucketKey = bucket ? peakKey(bucket.start, gran) : null;
-  const picked = pickedId ? ds.posts.find((p) => p.id === pickedId) ?? null : null;
+  const opened = postId ? ds.posts.find((p) => p.id === postId) ?? null : null;
+  // quem clicou pode estar bem abaixo, na lista do período: traz o painel para a tela
+  useEffect(() => { if (postId) top.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [postId]);
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q ? posts.filter((p) => p.caption.toLowerCase().includes(q) || p.title.toLowerCase().includes(q) || p.url.toLowerCase().includes(q)).slice(0, 6) : [];
@@ -51,6 +57,18 @@ export function EditorialNotes({ buckets, gran, selIdx, onSelect, peaks }: Props
       <span className="t">{p.title}</span>
     </>
   );
+
+  if (opened) {
+    return (
+      <div ref={top} style={{ scrollMarginTop: 16 }}>
+        <div className="flex between" style={{ marginBottom: 8 }}>
+          <button className="btn sm" onClick={() => onOpenPost(null)} aria-label="Voltar às anotações">← Anotações</button>
+          <PlatformBadge id={opened.platform} />
+        </div>
+        <PostDetail key={opened.id} post={opened} onChange={(p) => onOpenPost(p.id)} />
+      </div>
+    );
+  }
 
   return (
     <div className="grid" style={{ gap: 10 }}>
@@ -82,28 +100,21 @@ export function EditorialNotes({ buckets, gran, selIdx, onSelect, peaks }: Props
         </>
       ) : (
         <>
-          <input className="inp" placeholder="Buscar publicação para anotar (texto ou link)" aria-label="Buscar publicação para anotar" value={search} onChange={(e) => { setSearch(e.target.value); setPickedId(null); }} />
-          {!picked && matches.map((p) => (
-            <button key={p.id} className="post-item" style={{ textAlign: 'left' }} onClick={() => { setPickedId(p.id); setSearch(''); }}>{postHead(p)}</button>
+          <input className="inp" placeholder="Buscar publicação para anotar (texto ou link)" aria-label="Buscar publicação para anotar" value={search} onChange={(e) => setSearch(e.target.value)} />
+          {matches.map((p) => (
+            <button key={p.id} className="post-item" style={{ textAlign: 'left' }} onClick={() => onOpenPost(p.id)}>{postHead(p)}</button>
           ))}
-          {!picked && search.trim() && !matches.length && <Empty>Nenhuma publicação encontrada no período e filtros ativos.</Empty>}
-          {picked && (
-            <div className="post-item">
-              {postHead(picked)}
-              <NoteEditor key={picked.id} link={picked.url} />
-              <span className="flex"><button className="btn sm" onClick={() => setPickedId(null)}>Fechar</button></span>
-            </div>
-          )}
+          {search.trim() && !matches.length && <Empty>Nenhuma publicação encontrada no período e filtros ativos.</Empty>}
           <div className="grid" style={{ gap: 8, maxHeight: 420, overflow: 'auto' }}>
-            {postNotes.filter((p) => p.id !== picked?.id).map((p) => (
+            {postNotes.map((p) => (
               <div key={p.id} className="post-item">
                 {postHead(p)}
                 <NoteEditor link={p.url} />
-                <span className="flex"><button className="btn sm" onClick={() => setOpenPost(p)}>Abrir publicação</button><button className="btn sm" onClick={() => onSelect(bucketIndexOfDay(buckets, p.day))}>Ver no gráfico</button></span>
+                <span className="flex"><button className="btn sm" onClick={() => onOpenPost(p.id)}>Abrir publicação</button><button className="btn sm" onClick={() => onSelect(bucketIndexOfDay(buckets, p.day))}>Ver no gráfico</button></span>
               </div>
             ))}
           </div>
-          {!postNotes.length && !picked && <Empty>Sem anotações de publicações no período.</Empty>}
+          {!postNotes.length && <Empty>Sem anotações de publicações no período.</Empty>}
         </>
       )}
 

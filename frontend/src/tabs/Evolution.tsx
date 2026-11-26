@@ -30,11 +30,13 @@ export function Evolution() {
   const [compare, setCompare] = useState(true);
   const [selIdx, setSelIdx] = useState<number | null>(null);
   const [off, setOff] = useState<string[]>([]);
+  const [postId, setPostId] = useState<string | null>(null);
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const buckets = useMemo(() => makeBuckets(range, gran), [range, gran]);
   const prevBuckets = useMemo(() => makeBuckets(prevRange(range), gran), [range, gran]);
-  useEffect(() => setSelIdx(null), [range.start, range.end, gran]);
+  // a investigação abre no período mais recente
+  useEffect(() => setSelIdx(buckets.length ? buckets.length - 1 : null), [buckets]);
   const total = buildTable(ds, sel);
   const plats = activePlatforms(sel).filter((p) => !sel.profileIds.length || sel.profileIds.some((id) => id.startsWith(p + '-')));
   const annotated = useMemo(() => filterPosts(ds, sel, range.start, range.end)
@@ -125,10 +127,10 @@ export function Evolution() {
         <div className="grid g-main">
           <Panel title={sb ? `Período selecionado: ${sb.label}` : 'Selecione um ponto no gráfico'} sub={sb ? `${fmtDMY(sb.start)} a ${fmtDMY(sb.end)}` : 'ou escolha um dos picos detectados'}>
             {allPeaks.length > 0 && <div className="chips" style={{ marginBottom: 12 }}>{allPeaks.map((pk, k) => <button key={k} className="chip" aria-pressed={selIdx === pk.i} onClick={() => setSelIdx(pk.i)}><i />{pk.metric} · {buckets[pk.i].label}</button>)}</div>}
-            {sb ? <BucketDetail start={sb.start} end={sb.end} /> : <Empty>Nenhum ponto selecionado. Os picos (círculos laranja) são pontos acima de Q3 + 1,5 × amplitude interquartil.</Empty>}
+            {sb ? <BucketDetail start={sb.start} end={sb.end} onOpenPost={setPostId} /> : <Empty>Nenhum ponto selecionado. Os picos (círculos laranja) são pontos acima de Q3 + 1,5 × amplitude interquartil.</Empty>}
           </Panel>
           <Panel title="Anotações editoriais" sub="De picos e de publicações, no período e filtros ativos" light>
-            <EditorialNotes buckets={buckets} gran={gran} selIdx={selIdx} onSelect={setSelIdx} peaks={new Set(allPeaks.map((p) => p.i))} />
+            <EditorialNotes buckets={buckets} gran={gran} selIdx={selIdx} onSelect={setSelIdx} peaks={new Set(allPeaks.map((p) => p.i))} postId={postId} onOpenPost={setPostId} />
           </Panel>
         </div>
       </Section>
@@ -150,8 +152,8 @@ function peakNotesIn(notes: ReturnType<typeof useStore>['notes'], start: number,
   });
 }
 
-function BucketDetail({ start, end }: { start: number; end: number }) {
-  const { ds, state, notes, setOpenPost } = useStore();
+function BucketDetail({ start, end, onOpenPost }: { start: number; end: number; onOpenPost: (id: string) => void }) {
+  const { ds, state, notes } = useStore();
   const { sel } = state;
   const total = buildTable(ds, sel);
   const posts = filterPosts(ds, sel, start, end).sort((a, b) => (postEngagement(b) ?? -1) - (postEngagement(a) ?? -1)).slice(0, 8);
@@ -169,7 +171,7 @@ function BucketDetail({ start, end }: { start: number; end: number }) {
         {posts.map((p) => (
           <div key={p.id} className="post-item">
             <span className="flex between"><PlatformBadge id={p.platform} /><span className="small muted">{fmtDMY(p.day)} · {FORMAT_BY_ID[p.format].name}</span></span>
-            <button className="t link" style={{ textAlign: 'left', background: 'none', border: 0, padding: 0 }} onClick={() => setOpenPost(p)}>{p.title}</button>
+            <button className="t link" style={{ textAlign: 'left', background: 'none', border: 0, padding: 0 }} onClick={() => onOpenPost(p.id)}>{p.title}</button>
             <span className="small">{PLATFORM_BY_ID[p.platform].kpiLabel}: <b>{postMetric(p, 'kpi') === null ? ND : fmtCompact(postMetric(p, 'kpi') as number)}</b> · engajamento: <b>{postEngagement(p) === null ? ND : fmtInt(postEngagement(p) as number)}</b> · <a className="link" href={p.url} target="_blank" rel="noopener noreferrer">abrir link</a></span>
           </div>
         ))}

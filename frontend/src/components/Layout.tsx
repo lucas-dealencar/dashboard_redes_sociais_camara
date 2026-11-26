@@ -11,6 +11,7 @@ import { PRESETS, presetRange, useStore, type TabId } from '../state/store';
 import { MultiSelect, Modal, Segmented, Select, Note, PlatformBadge, PlatformDot } from './ui/ui';
 import { Toggle } from './ui/ui';
 import { NoteEditor } from './NoteEditor';
+import type { Post } from '../types';
 import { FORMAT_BY_ID } from '../data/catalog';
 import rodape from '../assets/rodape-camara.png';
 
@@ -144,8 +145,19 @@ export function Footer() {
 
 /* ---------------------- detalhe da publicação ---------------------- */
 export function PostDrawer() {
-  const { openPost: p, setOpenPost, ds, setPostTheme } = useStore();
+  const { openPost: p, setOpenPost } = useStore();
   if (!p) return null;
+  return (
+    <Modal side onClose={() => setOpenPost(null)} label="Detalhe da publicação">
+      <div className="flex between"><PlatformBadge id={p.platform} /><button className="x" onClick={() => setOpenPost(null)} aria-label="Fechar">×</button></div>
+      <PostDetail post={p} onChange={setOpenPost} />
+    </Modal>
+  );
+}
+
+/** Conteúdo do detalhe de uma publicação (gaveta lateral e painel de anotações). */
+export function PostDetail({ post: p, onChange }: { post: Post; onChange: (p: Post) => void }) {
+  const { ds, setPostTheme } = useStore();
   const m = p.metrics;
   const prof = ds.profiles.find((x) => x.id === p.profileId);
   const theme = ds.themes.find((t) => t.id === p.themeId);
@@ -156,8 +168,7 @@ export function PostDrawer() {
   const den = erDenominator(p);
   const row = (k: string, v: number | null | string) => <><dt>{k}</dt><dd>{v === null ? <span className="nd">{ND}</span> : typeof v === 'number' ? fmtInt(v) : v}</dd></>;
   return (
-    <Modal side onClose={() => setOpenPost(null)} label="Detalhe da publicação">
-      <div className="flex between"><PlatformBadge id={p.platform} /><button className="x" onClick={() => setOpenPost(null)} aria-label="Fechar">×</button></div>
+    <>
       <h3 style={{ fontFamily: 'var(--font-title)', fontSize: 22, margin: '8px 0 2px', letterSpacing: '-.02em' }}>{p.title}</h3>
       <p className="muted small">{prof?.name} · {fmtDMY(p.day)}{p.hour !== null ? ` às ${String(p.hour).padStart(2, '0')}h` : ''}</p>
       {p.caption && p.caption !== p.title && <p style={{ margin: '10px 0', whiteSpace: 'pre-line' }}>{p.caption}</p>}
@@ -165,7 +176,7 @@ export function PostDrawer() {
       <dl className="kv">
         {row('Formato', FORMAT_BY_ID[p.format].name)}
         <dt>Tema principal</dt>
-        <dd><Select label="Tema principal" value={p.themeId} options={ds.themes.map((t) => ({ id: t.id, label: t.name }))} onChange={(v) => { setPostTheme(p.id, v); setOpenPost({ ...p, themeId: v }); }} /> <span className="small muted">editável pela equipe</span></dd>
+        <dd><Select label="Tema principal" value={p.themeId} options={ds.themes.map((t) => ({ id: t.id, label: t.name }))} onChange={(v) => { setPostTheme(p.id, v); onChange({ ...p, themeId: v }); }} /> <span className="small muted">editável pela equipe</span></dd>
         {row('Temas secundários', p.secondaryThemeIds.length ? p.secondaryThemeIds.map((id) => ds.themes.find((t) => t.id === id)?.name).join(', ') : '—')}
         {row('Formato na planilha', p.nativeFormat ? `${p.nativeFormat}${p.colab ? ' (colab)' : ''}` : null)}
         {row('Classificação', p.classification)}
@@ -187,7 +198,7 @@ export function PostDrawer() {
           <h4 style={{ margin: '16px 0 6px' }}>Outras versões da mesma pauta</h4>
           <div className="grid" style={{ gap: 8 }}>
             {versions.map((v) => (
-              <button key={v.id} className="post-item" style={{ textAlign: 'left' }} onClick={() => setOpenPost(v)}>
+              <button key={v.id} className="post-item" style={{ textAlign: 'left' }} onClick={() => onChange(v)}>
                 <span className="flex between"><PlatformBadge id={v.platform} /><span className="small muted">{FORMAT_BY_ID[v.format].name}</span></span>
                 <span className="small">{PLATFORM_BY_ID[v.platform].kpiLabel}: <b>{postMetric(v, 'kpi') === null ? ND : fmtCompact(postMetric(v, 'kpi') as number)}</b> · taxa: <b>{postMetric(v, 'er') === null ? ND : `${(postMetric(v, 'er') as number).toFixed(2).replace('.', ',')}%`}</b></span>
               </button>
@@ -196,7 +207,7 @@ export function PostDrawer() {
         </>
       )}
       <p className="small muted" style={{ marginTop: 14 }}>Tema atual: {theme?.name}. Reclassificações ficam salvas só neste navegador (a fonte oficial do tema é a planilha). Valores “n/d” = métrica não fornecida para a publicação (diferente de zero); engajamento “n/d” = incompleto (ex.: Stories sem curtidas).</p>
-    </Modal>
+    </>
   );
 }
 
