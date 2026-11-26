@@ -1,9 +1,12 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { niceScale, heatColor, HEAT, SEQ } from './scale';
 import { downloadSvgPng } from '../../utils/export';
+import { PLATFORM_LOGO } from '../../data/logos';
 import { BRAZIL_STATES, BRAZIL_VB_W, BRAZIL_VIEWBOX } from '../../data/brazilMap';
 
 const F = 'DM Sans, Arial, sans-serif';
+/** logotipo quando a chave do item é uma rede */
+const logoOf = (key: string): string | undefined => (PLATFORM_LOGO as Record<string, string>)[key];
 
 export function useWidth(): [RefObject<HTMLDivElement>, number] {
   const ref = useRef<HTMLDivElement>(null);
@@ -135,7 +138,7 @@ export function Legend({ items, off, toggle }: { items: { id: string; label: str
     <div className="legend">
       {items.map((it) => (
         <button key={it.id} aria-pressed={!off?.includes(it.id)} onClick={() => toggle?.(it.id)} disabled={!toggle}>
-          <i style={{ borderTopColor: it.color, borderTopStyle: it.dash ? 'dashed' : 'solid' }} />{it.label}
+          <i style={{ borderTopColor: it.color, borderTopStyle: it.dash ? 'dashed' : 'solid' }} />{logoOf(it.id) && <img className="plogo" src={logoOf(it.id)} alt="" style={{ width: 16, height: 16, marginRight: 4 }} />}{it.label}
         </button>
       ))}
     </div>
@@ -158,7 +161,9 @@ export function HBars({ rows, max, aria, labelW = 190, rowH = 34, color = '#134e
           return (
             <g key={r.key} onClick={r.onClick} style={{ cursor: r.onClick ? 'pointer' : 'default' }} opacity={r.faded ? 0.55 : 1}>
               <rect x={0} y={y0 - 2} width={W} height={rowH - 2} fill={r.active ? '#e3efee' : 'transparent'} rx={4} />
-              <T x={lw - 8} y={y0 + rowH / 2 - 1} anchor="end" fill="#2f5258" size={12.5}>{r.label.length > 40 ? r.label.slice(0, 39) + '…' : r.label}</T>
+              {logoOf(r.key)
+                ? <><image href={logoOf(r.key)} x={4} y={y0 + rowH / 2 - 14} width={18} height={18} /><T x={28} y={y0 + rowH / 2 - 1} fill="#2f5258" size={12.5}>{r.label}</T></>
+                : <T x={lw - 8} y={y0 + rowH / 2 - 1} anchor="end" fill="#2f5258" size={12.5}>{r.label.length > 40 ? r.label.slice(0, 39) + '…' : r.label}</T>}
               {r.value === null ? <T x={lw} y={y0 + rowH / 2 - 1} italic fill="#8aa1a5" size={12}>indisponível</T> : <rect x={lw} y={y0 + 4} width={bw} height={rowH - 12} rx={3} fill={r.color ?? color} />}
               {r.value !== null && <T x={lw + bw + 6} y={y0 + rowH / 2 - 1} weight={800} fill="#07333a" size={12.5}>{r.text}</T>}
               {r.sub && <T x={W} y={y0 + rowH / 2 - 1} anchor="end" size={11} fill="#6e898e">{r.sub}</T>}

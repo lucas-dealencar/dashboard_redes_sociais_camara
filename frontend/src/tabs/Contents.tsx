@@ -7,7 +7,7 @@ import { noteKey } from '../data/notes';
 import { fmtCompact, fmtInt, fmtPct, fmtSec, ND } from '../domain/format';
 import { useStore } from '../state/store';
 import type { FormatId, PlatformId, Post } from '../types';
-import { Section, Panel, Well, Note, Select, Segmented, ExportButtons, DataTable, PlatformBadge, PlatformDot, Empty, Modal, type Col } from '../components/ui/ui';
+import { Section, Panel, Well, Note, Select, Segmented, ExportButtons, DataTable, PlatformBadge, PlatformLogo, Empty, Modal, type Col } from '../components/ui/ui';
 import { Columns, HBars, HeatTable, PngButton, Scatter, SwatchLegend } from '../components/charts/charts';
 import type { Table } from '../utils/export';
 
@@ -174,7 +174,7 @@ function Pautas({ posts }: { posts: Post[] }) {
   const cols: Col<(typeof groups)[number]>[] = [
     { id: 't', label: 'Pauta', render: (g) => <span><b>{g.title}</b><br /><small className="muted">{g.id} · {g.theme}</small></span>, sort: (g) => g.title },
     { id: 'd', label: 'Data', render: (g) => fmtDMY(g.day), sort: (g) => g.day },
-    { id: 'r', label: 'Versões por rede', render: (g) => <span className="flex" style={{ gap: 4 }}>{g.ps.map((p) => <PlatformDot key={p.id} id={p.platform} />)}<small className="muted">{g.ps.length}</small></span>, sort: (g) => g.ps.length },
+    { id: 'r', label: 'Versões por rede', render: (g) => <span className="flex" style={{ gap: 4 }}>{g.ps.map((p) => <PlatformLogo key={p.id} id={p.platform} />)}<small className="muted">{g.ps.length}</small></span>, sort: (g) => g.ps.length },
     { id: 'e', label: 'Engajamento somado', num: true, render: (g) => fmtCompact(g.eng), sort: (g) => g.eng },
     { id: 'b', label: 'Maior taxa', render: (g) => <span><PlatformBadge id={g.best.platform} /> {postMetric(g.best, 'er') === null ? ND : fmtPct(postMetric(g.best, 'er') as number, 2)}</span> },
   ];

@@ -1,7 +1,6 @@
 import type { KpiResult } from '../domain/kpis';
 import { fmtCompact, fmtDeltaPP, fmtDeltaPct, fmtInt, fmtPct, ND } from '../domain/format';
 import { PLATFORM_BY_ID } from '../data/catalog';
-import { RangeBar } from './charts/charts';
 
 export function fmtKpi(v: number | null, fmt: 'int' | 'pct' | 'compact'): string {
   if (v === null) return ND;
@@ -57,18 +56,14 @@ export function KpiLite({ r }: { r: KpiResult }) {
 const deltaTxt = (r: KpiResult) => (r.delta === null ? 'variação não calculável' : r.def.delta === 'pp' ? `${fmtDeltaPP(r.delta)} vs. anterior` : `${fmtDeltaPct(r.delta)} vs. anterior`);
 const deltaCls = (r: KpiResult) => (r.delta === null || Math.abs(r.delta) < 0.05 ? 'flat' : (r.def.id === 'lost' ? r.delta < 0 : r.delta > 0) ? 'up' : 'down');
 
-/** Cartão de seção: mesma estrutura dos cartões de rede da aba Evolução e redes (sem gráfico de linha). */
-export function SectionCard({ main, others, refDays, title, support }: { main: KpiResult; others: KpiResult[]; refDays: number; title: string; support: string }) {
-  const b = main.bench;
+/** Cartão de seção: KPI principal, variação e indicadores de apoio (o benchmark fica por rede). */
+export function SectionCard({ main, others, title, support }: { main: KpiResult; others: KpiResult[]; title: string; support: string }) {
   return (
     <div className="plat-card" style={{ borderTopColor: 'var(--mint)' }}>
       <h4><span className="badge" style={{ fontSize: 15 }}><i className="dot" style={{ background: 'var(--mint)' }} />{title}</span><span className="pill req">KPI principal</span></h4>
       <span className="small muted">KPI principal: {main.def.label}</span>
       <span className="big">{fmtKpi(main.value, main.def.fmt)}</span>
       {main.value !== null && <span className={`k-delta ${deltaCls(main)}`}>{deltaTxt(main)}</span>}
-      {b && main.value !== null ? (
-        <><RangeBar q1={b.q1} q3={b.q3} med={b.median} value={main.value} /><span className="small"><span className={`pill ${b.status}`}>{b.status === 'acima' ? '▲ acima do padrão' : b.status === 'abaixo' ? '▼ abaixo do padrão' : '● dentro do padrão'}</span> <span className="muted">mediana {fmtKpi(b.median, main.def.fmt)}</span></span></>
-      ) : <span className="small nd">Benchmark: histórico insuficiente</span>}
       <ul>
         {others.map((r) => <li key={r.def.id} title={r.def.hint}><span>{r.def.label}</span><b>{fmtKpi(r.value, r.def.fmt)}</b></li>)}
       </ul>

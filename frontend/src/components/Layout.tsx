@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FORMATS, PLATFORMS, PLATFORM_BY_ID } from '../data/catalog';
 import { ADHERENCE, DICTIONARY } from '../domain/dictionary';
 import { hasContentFilter } from '../domain/aggregate';
@@ -8,7 +8,9 @@ import { fmtCompact, fmtInt, ND } from '../domain/format';
 import { erDenominator, postMetric } from '../domain/contentStats';
 import { postEngagement } from '../domain/aggregate';
 import { PRESETS, presetRange, useStore, type TabId } from '../state/store';
-import { MultiSelect, Modal, Segmented, Select, Note, PlatformBadge, PlatformDot } from './ui/ui';
+import { MultiSelect, Modal, Segmented, Select, Note, PlatformBadge, PlatformLogo } from './ui/ui';
+import { Popover } from './ui/picker';
+import { useIsMobile } from '../utils/device';
 import { Toggle } from './ui/ui';
 import { NoteEditor } from './NoteEditor';
 import type { Post } from '../types';
@@ -28,14 +30,13 @@ const fmtGerado = (iso: string) => {
 };
 
 export function Cover() {
-  const { ds } = useStore();
   return (
     <header className="cover">
       <div className="wrap cover-in">
         <span className="selo">REDES SOCIAIS DA CÂMARA</span>
         <h1>Dashboard integrado de redes sociais</h1>
         <div className="cover-row">
-          <span className="strip">Dados até {fmtDMY(LAST_DAY)} · gerados em {fmtGerado(ds.meta.generatedAt)}</span>
+          <span className="strip">Atualizado em {fmtDMY(LAST_DAY)}</span>
         </div>
       </div>
     </header>
@@ -44,9 +45,12 @@ export function Cover() {
 
 export function Nav() {
   const { state, setTab, setMethodOpen } = useStore();
+  const list = useRef<HTMLDivElement>(null);
+  // no celular a barra rola na horizontal: mantém a aba atual visível
+  useEffect(() => { list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }, [state.tab]);
   return (
     <nav className="nav" aria-label="Seções do dashboard">
-      <div className="wrap nav-in" role="tablist">
+      <div className="wrap nav-in" role="tablist" ref={list}>
         {TABS.map((t) => (
           <button key={t.id} role="tab" className="tab" aria-selected={state.tab === t.id} onClick={() => setTab(t.id)}>
             {t.label}<small>{t.sub}</small>
@@ -58,76 +62,105 @@ export function Nav() {
   );
 }
 
+/** Seletor de redes: todas, uma ou várias. */
+function PlatformFilter() {
+  const { state, setSel } = useStore();
+  const { sel } = state;
+  const all = sel.platforms.length === 0;
+  const toggle = (id: (typeof PLATFORMS)[number]['id']) => {
+    if (all) return setSel({ platforms: [id] });
+    const next = sel.platforms.includes(id) ? sel.platforms.filter((p) => p !== id) : [...sel.platforms, id];
+    setSel({ platforms: next.length === 0 || next.length === PLATFORMS.length ? [] : next });
+  };
+  const shown = all ? PLATFORMS : PLATFORMS.filter((p) => sel.platforms.includes(p.id));
+  const summary = all ? `Todas as redes (${PLATFORMS.length})` : shown.length === 1 ? shown[0].name : `${shown.length} de ${PLATFORMS.length} redes`;
+  return (
+    <Popover ariaLabel="Redes sociais" title="Redes sociais" hint="Toque em uma rede para ver só ela; toque em outras para somar à seleção." className="plat-wide"
+      trigger={<><span className="dots">{shown.slice(0, 4).map((p) => <PlatformLogo key={p.id} id={p.id} />)}{shown.length > 4 && <em>+{shown.length - 4}</em>}</span><span className="lbl">{summary}</span></>}>
+      {(close) => (
+        <>
+          <button type="button" className="plat-opt all" aria-pressed={all} onClick={() => setSel({ platforms: [] })}><span className="chk" />Todas as redes</button>
+          <div className="plat-grid">
+            {PLATFORMS.map((p) => (
+              <button type="button" key={p.id} className="plat-opt" aria-pressed={!all && sel.platforms.includes(p.id)} onClick={() => toggle(p.id)}>
+                <span className="chk" /><PlatformLogo id={p.id} />{p.name}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn primary plat-done" onClick={close}>Concluir</button>
+        </>
+      )}
+    </Popover>
+  );
+}
+
 export function FilterBar() {
   const { ds, state, setSel, setRange, setBench, resetFilters } = useStore();
   const { sel, range, preset, benchDays } = state;
+  const mobile = useIsMobile();
+  const [more, setMore] = useState(false);
   const profOpts = useMemo(() => ds.profiles.filter((p) => !sel.platforms.length || sel.platforms.includes(p.platform)).map((p) => ({ id: p.id, label: p.name, group: PLATFORM_BY_ID[p.platform].name })), [ds.profiles, sel.platforms]);
-  const allSel = sel.platforms.length === 0;
-  const togglePlat = (id: (typeof PLATFORMS)[number]['id']) => {
-    if (allSel) return setSel({ platforms: [id] });
-    const next = sel.platforms.includes(id) ? sel.platforms.filter((p) => p !== id) : [...sel.platforms, id];
-    setSel({ platforms: next.length === PLATFORMS.length ? [] : next });
-  };
   const content = hasContentFilter(sel);
   const formatOpts = FORMATS.filter((f) => PLATFORMS.some((p) => p.formats.includes(f.id)));
   const benchOpts = ds.meta.benchAlternatives.length ? ds.meta.benchAlternatives : [30, 60, 90, 180];
+  const active = sel.profileIds.length + sel.themeIds.length + sel.formats.length + (sel.paid !== 'all' ? 1 : 0) + (preset === 'custom' ? 1 : 0);
   const setDate = (which: 'start' | 'end', iso: string) => {
     if (!iso) return;
-    let d = Math.min(LAST_DAY, Math.max(0, dayOf(iso)));
+    const d = Math.min(LAST_DAY, Math.max(0, dayOf(iso)));
     const r = { ...range, [which]: d };
     if (r.start > r.end) { if (which === 'start') r.end = r.start; else r.start = r.end; }
-    d = 0;
     setRange(r, 'custom');
   };
   return (
     <section className="filters" aria-label="Filtros globais">
-      <div className="f-row">
-        <div className="f-group">
+      <div className="f-row f-main">
+        <div className="f-group f-plat">
+          <span className="f-label">Redes sociais</span>
+          <PlatformFilter />
+        </div>
+        <div className="f-group f-period">
           <span className="f-label">Período</span>
-          <div className="flex">
-            <Segmented value={preset} label="Período predefinido" options={[...PRESETS.map((p) => ({ id: p.id, label: p.label })), ...(preset === 'custom' ? [{ id: 'custom', label: 'Personalizado' }] : [])]}
-              onChange={(v) => { const p = PRESETS.find((x) => x.id === v); if (p) setRange(presetRange(p.days), p.id); }} />
-            <label className="flex small">de <input className="inp" type="date" value={isoOf(range.start)} min={isoOf(0)} max={isoOf(LAST_DAY)} onChange={(e) => setDate('start', e.target.value)} /></label>
-            <label className="flex small">até <input className="inp" type="date" value={isoOf(range.end)} min={isoOf(0)} max={isoOf(LAST_DAY)} onChange={(e) => setDate('end', e.target.value)} /></label>
+          <Segmented value={preset} label="Período predefinido" options={[...PRESETS.map((p) => ({ id: p.id, label: p.label })), ...(preset === 'custom' ? [{ id: 'custom', label: 'Personalizado' }] : [])]}
+            onChange={(v) => { const p = PRESETS.find((x) => x.id === v); if (p) setRange(presetRange(p.days), p.id); }} />
+        </div>
+        {mobile
+          ? <button className="btn more-btn" aria-expanded={more} onClick={() => setMore(!more)}>{more ? 'Ocultar filtros' : 'Mais filtros'}{active > 0 && <span className="pill req">{active} ativo{active > 1 ? 's' : ''}</span>}<span aria-hidden>{more ? '▴' : '▾'}</span></button>
+          : <button className="btn sm f-clear" onClick={resetFilters}>Limpar filtros</button>}
+      </div>
+      {(!mobile || more) && (
+        <div className="f-row f-extra">
+          <div className="f-group f-dates">
+            <span className="f-label">Datas</span>
+            <div className="flex nowrap">
+              <label className="flex small nowrap">de <input className="inp" type="date" value={isoOf(range.start)} min={isoOf(0)} max={isoOf(LAST_DAY)} onChange={(e) => setDate('start', e.target.value)} /></label>
+              <label className="flex small nowrap">até <input className="inp" type="date" value={isoOf(range.end)} min={isoOf(0)} max={isoOf(LAST_DAY)} onChange={(e) => setDate('end', e.target.value)} /></label>
+            </div>
           </div>
-        </div>
-        <div className="f-group">
-          <span className="f-label">Perfil</span>
-          <MultiSelect label="Perfil" options={profOpts} value={sel.profileIds} onChange={(v) => setSel({ profileIds: v })} allLabel="Todos os perfis" />
-        </div>
-        <div className="f-group">
-          <span className="f-label">Tema</span>
-          <MultiSelect label="Tema" options={ds.themes.map((t) => ({ id: t.id, label: t.name }))} value={sel.themeIds} onChange={(v) => setSel({ themeIds: v })} allLabel="Todos os temas" />
-        </div>
-        <div className="f-group">
-          <span className="f-label">Formato</span>
-          <MultiSelect label="Formato" options={formatOpts.map((f) => ({ id: f.id, label: f.name }))} value={sel.formats} onChange={(v) => setSel({ formats: v as never })} allLabel="Todos os formatos" />
-        </div>
-        {ds.meta.hasPaid && (
           <div className="f-group">
-            <span className="f-label">Orgânico / pago</span>
-            <Segmented value={sel.paid} label="Orgânico ou pago" options={[{ id: 'all', label: 'Todos' }, { id: 'organico', label: 'Orgânico' }, { id: 'pago', label: 'Pago' }]} onChange={(v) => setSel({ paid: v })} />
+            <span className="f-label">Perfil</span>
+            <MultiSelect label="Perfil" options={profOpts} value={sel.profileIds} onChange={(v) => setSel({ profileIds: v })} allLabel="Todos os perfis" />
           </div>
-        )}
-        <div className="f-group">
-          <span className="f-label">Janela do benchmark</span>
-          <Select label="Janela do benchmark" value={benchDays} options={benchOpts.map((d) => ({ id: d, label: `${d} dias${d === ds.meta.benchDays ? ' (padrão)' : ''}` }))} onChange={setBench} />
-        </div>
-      </div>
-      <div className="f-row" style={{ alignItems: 'center' }}>
-        <div className="f-group" style={{ flex: 1 }}>
-          <span className="f-label">Plataforma — todas, uma rede ou uma seleção</span>
-          <div className="chips">
-            <button className="chip" aria-pressed={allSel} onClick={() => setSel({ platforms: [] })}><i />Todas as redes</button>
-            {PLATFORMS.map((p) => (
-              <button key={p.id} className="chip" aria-pressed={allSel || sel.platforms.includes(p.id)} onClick={() => togglePlat(p.id)}>
-                <PlatformDot id={p.id} />{p.name}
-              </button>
-            ))}
+          <div className="f-group">
+            <span className="f-label">Tema</span>
+            <MultiSelect label="Tema" options={ds.themes.map((t) => ({ id: t.id, label: t.name }))} value={sel.themeIds} onChange={(v) => setSel({ themeIds: v })} allLabel="Todos os temas" />
           </div>
+          <div className="f-group">
+            <span className="f-label">Formato</span>
+            <MultiSelect label="Formato" options={formatOpts.map((f) => ({ id: f.id, label: f.name }))} value={sel.formats} onChange={(v) => setSel({ formats: v as never })} allLabel="Todos os formatos" />
+          </div>
+          {ds.meta.hasPaid && (
+            <div className="f-group">
+              <span className="f-label">Orgânico / pago</span>
+              <Segmented value={sel.paid} label="Orgânico ou pago" options={[{ id: 'all', label: 'Todos' }, { id: 'organico', label: 'Orgânico' }, { id: 'pago', label: 'Pago' }]} onChange={(v) => setSel({ paid: v })} />
+            </div>
+          )}
+          <div className="f-group">
+            <span className="f-label">Janela do benchmark</span>
+            <Select label="Janela do benchmark" value={benchDays} options={benchOpts.map((d) => ({ id: d, label: `${d} dias${d === ds.meta.benchDays ? ' (padrão)' : ''}` }))} onChange={setBench} />
+          </div>
+          {mobile && <button className="btn f-clear" onClick={resetFilters}>Limpar filtros</button>}
         </div>
-        <button className="btn sm" onClick={resetFilters}>Limpar filtros</button>
-      </div>
+      )}
       {content && <Note>Tema e formato filtram <b>métricas de publicação</b>. Seguidores, novos seguidores e perdas são dados da conta e respondem apenas a plataforma e perfil.</Note>}
     </section>
   );

@@ -11,7 +11,9 @@ import { useStore } from '../state/store';
 import { noteKey, parsePeakKey } from '../data/notes';
 import { EditorialNotes } from '../components/EditorialNotes';
 import type { PlatformId } from '../types';
-import { Section, Panel, Well, Note, Select, Segmented, Toggle, ExportButtons, PlatformBadge, Empty } from '../components/ui/ui';
+import { Section, Panel, Well, Note, Select, Toggle, ExportButtons, PlatformBadge, Empty } from '../components/ui/ui';
+import { Picker } from '../components/ui/picker';
+import { SmallMultiples } from '../components/charts/SmallMultiples';
 import { Legend, LineChart, PngButton, RangeBar, type LineSeries } from '../components/charts/charts';
 import { fmtKpi } from '../components/Kpi';
 import type { Table } from '../utils/export';
@@ -57,7 +59,6 @@ export function Evolution() {
     return { id, def, vals, prevVals, covered, peaks, perNet, missing: plats.filter((p) => !covered.includes(p)) };
   });
 
-  const toggleMetric = (id: EvoMetric) => setMetrics((m) => (m.includes(id) ? (m.length > 1 ? m.filter((x) => x !== id) : m) : m.length >= 4 ? m : [...m, id]));
   const allPeaks = panels.flatMap((p) => p.peaks.map((i) => ({ metric: p.def.label, i })));
   const sb = selIdx !== null ? buckets[selIdx] : null;
 
@@ -65,13 +66,23 @@ export function Evolution() {
     <div className="stack">
       <Section title="Séries históricas" sub="Clique em um ponto (ou use as setas do teclado) para investigar picos">
         <Panel title="Controles" light>
-          <div className="f-row" style={{ alignItems: 'flex-end' }}>
-            <div className="f-group" style={{ flex: 1 }}>
+          <div className="f-row evo-controls">
+            <div className="f-group">
               <span className="f-label">Métricas (até 4)</span>
-              <div className="chips">{EVO_METRICS.map((m) => <button key={m.id} className="chip" aria-pressed={metrics.includes(m.id)} onClick={() => toggleMetric(m.id)}><i />{m.label}</button>)}</div>
+              <Picker ariaLabel="Métricas" title="Métricas (até 4)" hint="Escolha até 4 métricas; cada uma aparece em seu próprio quadro, com o mesmo eixo de tempo." multi max={4}
+                options={EVO_METRICS.map((m) => ({ id: m.id, label: m.label }))} value={metrics} onChange={setMetrics}
+                summary={metrics.length === 1 ? EVO_METRICS.find((m) => m.id === metrics[0])?.label ?? '1 métrica' : `${metrics.length} métricas selecionadas`} />
             </div>
-            <div className="f-group"><span className="f-label">Granularidade</span><Segmented value={gran} label="Granularidade" options={[{ id: 'dia', label: 'Diária' }, { id: 'semana', label: 'Semanal' }, { id: 'mes', label: 'Mensal' }]} onChange={setGranPick} /></div>
-            <div className="f-group"><span className="f-label">Série</span><Segmented value={byNet ? 'rede' : 'total'} label="Série" options={[{ id: 'total', label: 'Consolidado' }, { id: 'rede', label: 'Por rede' }]} onChange={(v) => setByNet(v === 'rede')} /></div>
+            <div className="f-group">
+              <span className="f-label">Granularidade</span>
+              <Picker ariaLabel="Granularidade" title="Granularidade" options={[{ id: 'dia', label: 'Diária' }, { id: 'semana', label: 'Semanal' }, { id: 'mes', label: 'Mensal' }]}
+                value={[gran]} onChange={(v) => setGranPick(v[0])} summary={{ dia: 'Diária', semana: 'Semanal', mes: 'Mensal' }[gran]} />
+            </div>
+            <div className="f-group">
+              <span className="f-label">Série</span>
+              <Picker ariaLabel="Série" title="Série" options={[{ id: 'total', label: 'Consolidado' }, { id: 'rede', label: 'Por rede' }]}
+                value={[byNet ? 'rede' : 'total']} onChange={(v) => setByNet(v[0] === 'rede')} summary={byNet ? 'Por rede' : 'Consolidado'} />
+            </div>
             <Toggle checked={compare && !byNet} onChange={setCompare} label="Comparar com período anterior" />
           </div>
           {byNet && metrics.length > 1 && <p className="small muted" style={{ marginTop: 8 }}>O modo “por rede” exibe uma métrica por vez; com várias métricas o gráfico mostra o consolidado.</p>}
@@ -86,31 +97,37 @@ export function Evolution() {
             const palette = ['#07333a', '#2bc4a0', '#f5a623', '#c2418a'];
             const dashes = [undefined, undefined, undefined, '7 4'];
             const covered = panels.filter((p) => p.covered.length > 0);
-            const series: LineSeries[] = multi
-              ? covered.map((p, k) => ({ id: p.id, label: p.def.label, color: palette[k % palette.length], dash: dashes[k % 4], values: p.vals, fmt: fmtFor(p.def.fmt) }))
-              : useNet && one ? one.perNet.filter((s) => !off.includes(s.id)) : one ? [{ id: 'total', label: 'Consolidado', color: '#134e5e', values: one.vals }] : [];
+            const series: LineSeries[] = useNet && one ? one.perNet.filter((s) => !off.includes(s.id)) : one ? [{ id: 'total', label: 'Consolidado', color: '#134e5e', values: one.vals }] : [];
             const title = multi ? 'Métricas selecionadas' : one?.def.label ?? 'Séries históricas';
             const table = (): Table => multi
               ? { name: 'series-historicas', headers: ['Período', ...covered.map((p) => p.def.label)], rows: buckets.map((b, i) => [b.label, ...covered.map((p) => p.vals[i])]) }
               : { name: `serie-${one.id}`, headers: ['Período', ...(useNet ? one.perNet.map((s) => s.label) : ['Consolidado', 'Período anterior'])], rows: buckets.map((b, i) => [b.label, ...(useNet ? one.perNet.map((s) => s.values[i]) : [one.vals[i], one.prevVals[i] ?? null])]) };
             const peaksOne = !multi && !useNet && one ? one.peaks : [];
+            const multiPeaks = multi && covered.some((p) => p.peaks.length > 0);
+            const multiGaps = multi && covered.some((p) => p.vals.some((v) => v === null));
             if (!one) return <Empty>Selecione ao menos uma métrica.</Empty>;
             return (
               <Panel title={title}
-                sub={multi ? 'Cada linha usa a própria escala (mín. a máx. da métrica no período) para permitir a comparação do formato das curvas; passe o mouse para ver os valores reais.' : one.missing.length && one.covered.length ? `Disponível em ${one.covered.length} de ${plats.length} redes (indisponível em: ${one.missing.map((m) => PLATFORM_BY_ID[m].name).join(', ')}).` : one.id === 'followers' ? 'Soma de vínculos de seguimento, não pessoas únicas.' : undefined}
+                sub={multi ? 'Cada métrica tem o seu quadro, com escala própria e valores reais, no mesmo eixo de tempo. Faixas hachuradas indicam períodos sem dados (n/d): a linha não é ligada por cima da lacuna. Círculos laranja são picos.' : one.missing.length && one.covered.length ? `Disponível em ${one.covered.length} de ${plats.length} redes (indisponível em: ${one.missing.map((m) => PLATFORM_BY_ID[m].name).join(', ')}).` : one.id === 'followers' ? 'Soma de vínculos de seguimento, não pessoas únicas.' : undefined}
                 tools={covered.length > 0 && <><ExportButtons table={table} /><PngButton target={() => refs.current.main ?? null} name="series-historicas" /></>}>
                 {covered.length === 0 ? <Empty>Métrica indisponível para as redes selecionadas.</Empty> : (
                   <Well>
                     <div ref={(el) => { refs.current.main = el; }}>
-                      <LineChart aria={`${title} ao longo do período`} labels={buckets.map((b) => b.label)} series={series} rel={multi}
-                        compare={!multi && compare && !useNet && one.prevVals.length ? [{ id: 'prev', label: 'Período anterior', color: '#8fa6aa', values: one.prevVals }] : undefined}
-                        fmt={fmtFor(one.def.fmt)} zero={one.id !== 'followers' && one.id !== 'er'} peaks={peaksOne} markers={markers} selected={selIdx} onSelect={setSelIdx} height={multi ? 320 : 250} area={!multi && !useNet} />
+                      {multi ? (
+                        <SmallMultiples aria={`${title} ao longo do período`} labels={buckets.map((b) => b.label)} markers={markers} selected={selIdx} onSelect={setSelIdx}
+                          rows={covered.map((p, k) => ({ id: p.id, label: p.def.label, color: palette[k % palette.length], dash: dashes[k % 4], values: p.vals, fmt: fmtFor(p.def.fmt), peaks: p.peaks, zero: p.id !== 'followers' && p.id !== 'er' }))} />
+                      ) : (
+                        <LineChart aria={`${title} ao longo do período`} labels={buckets.map((b) => b.label)} series={series}
+                          compare={compare && !useNet && one.prevVals.length ? [{ id: 'prev', label: 'Período anterior', color: '#8fa6aa', values: one.prevVals }] : undefined}
+                          fmt={fmtFor(one.def.fmt)} zero={one.id !== 'followers' && one.id !== 'er'} peaks={peaksOne} markers={markers} selected={selIdx} onSelect={setSelIdx} height={250} area={!useNet} />
+                      )}
                     </div>
                     {useNet ? <Legend items={one.perNet} off={off} toggle={(id) => setOff((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]))} /> : (
                       <div className="legend">
                         {multi ? covered.map((p, k) => <span key={p.id} className="badge"><i style={{ width: 18, borderTop: `3px ${dashes[k % 4] ? 'dashed' : 'solid'} ${palette[k % palette.length]}`, display: 'inline-block' }} /> {p.def.label}</span>) : <span className="badge"><i style={{ width: 18, borderTop: '3px solid #134e5e', display: 'inline-block' }} /> Consolidado</span>}
                         {!multi && compare && <span className="badge muted"><i style={{ width: 18, borderTop: '3px dashed #8fa6aa', display: 'inline-block' }} /> Período anterior</span>}
-                        {peaksOne.length > 0 && <span className="badge"><i style={{ width: 12, height: 12, borderRadius: '50%', background: '#f5a623', border: '2px solid #07333a', display: 'inline-block' }} /> Pico</span>}
+                        {(peaksOne.length > 0 || multiPeaks) && <span className="badge"><i style={{ width: 12, height: 12, borderRadius: '50%', background: '#f5a623', border: '2px solid #07333a', display: 'inline-block' }} /> Pico</span>}
+                        {multiGaps && <span className="badge muted"><i style={{ width: 16, height: 10, background: 'repeating-linear-gradient(45deg,#b5c9cc 0 2px,#eef4f5 2px 5px)', display: 'inline-block' }} /> Sem dados</span>}
                         <span className="badge"><i style={{ width: 10, height: 10, background: '#7a56d6', transform: 'rotate(45deg)', display: 'inline-block' }} /> Anotação</span>
                         {multi && panels.length > covered.length && <span className="badge muted">Indisponíveis para as redes selecionadas: {panels.filter((p) => !covered.includes(p)).map((p) => p.def.label).join(', ')}</span>}
                       </div>

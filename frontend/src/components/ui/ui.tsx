@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PLATFORM_BY_ID } from '../../data/catalog';
 import type { PlatformId } from '../../types';
 import { downloadCsv, downloadXlsx, type Table } from '../../utils/export';
+import { PLATFORM_LOGO } from '../../data/logos';
+import { Info } from './Info';
 
 export function Section({ title, sub, children, id }: { title: string; sub?: ReactNode; children: ReactNode; id?: string }) {
   return (
     <section id={id}>
       <div className="sec-h">
         <h2>{title}</h2>
-        {sub && <span className="sub">{sub}</span>}
+        {sub && <Info>{sub}</Info>}
       </div>
       {children}
     </section>
@@ -18,11 +20,10 @@ export function Section({ title, sub, children, id }: { title: string; sub?: Rea
 export function Panel({ title, sub, tools, children, light, id }: { title?: ReactNode; sub?: ReactNode; tools?: ReactNode; children: ReactNode; light?: boolean; id?: string }) {
   return (
     <article className={`panel${light ? ' light' : ''}`} id={id}>
-      {(title || tools) && (
+      {(title || sub || tools) && (
         <div className="p-head">
           <div>
-            <h3>{title}</h3>
-            {sub && <p className="sub">{sub}</p>}
+            <h3>{title}{sub && <Info>{sub}</Info>}</h3>
           </div>
           {tools && <div className="p-tools">{tools}</div>}
         </div>
@@ -105,7 +106,10 @@ export function MultiSelect({ label, options, value, onChange, allLabel = 'Todos
 export function PlatformDot({ id }: { id: PlatformId }) {
   return <span className="dot" style={{ background: PLATFORM_BY_ID[id].color }} aria-hidden />;
 }
-export const PlatformBadge = ({ id }: { id: PlatformId }) => <span className="badge"><PlatformDot id={id} />{PLATFORM_BY_ID[id].name}</span>;
+export function PlatformLogo({ id, size = 18 }: { id: PlatformId; size?: number }) {
+  return <img className="plogo" src={PLATFORM_LOGO[id]} alt="" width={size} height={size} aria-hidden draggable={false} />;
+}
+export const PlatformBadge = ({ id }: { id: PlatformId }) => <span className="badge"><PlatformLogo id={id} />{PLATFORM_BY_ID[id].name}</span>;
 
 export function ExportButtons({ table }: { table: () => Table }) {
   return (

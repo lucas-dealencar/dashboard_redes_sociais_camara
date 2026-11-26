@@ -42,7 +42,7 @@ export function Overview() {
       <Section title="Resumo de Métricas">
         {!hasFollowers && <Note>Audiência (seguidores, novos, perdas e saldo) não aparece: a planilha atual traz essas colunas vazias. Veja “Limitações da base” em Metodologia.</Note>}
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', marginTop: hasFollowers ? 0 : 12 }}>
-          {SECTIONS.filter((c) => hasFollowers || c.id !== 'audiencia').map((c) => <SectionCard key={c.id} title={SHORT[c.id]} support={SUPPORT[c.id]} main={kpis[c.main]} others={c.others.map((id) => kpis[id])} refDays={benchDays} />)}
+          {SECTIONS.filter((c) => hasFollowers || c.id !== 'audiencia').map((c) => <SectionCard key={c.id} title={SHORT[c.id]} support={SUPPORT[c.id]} main={kpis[c.main]} others={c.others.map((id) => kpis[id])} />)}
         </div>
       </Section>
 
