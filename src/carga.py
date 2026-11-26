@@ -17,7 +17,8 @@ from src import config
 _PADRAO_PARTICAO = re.compile(r"^\d{4}-\d{2}\.json$")
 COLUNAS_PUBLICACAO = [
     "data", "rede", "perfil", "link", "formato", "formato_nativo", "colab", "ao_vivo",
-    "tema", "tema_secundario", "tipo_classificacao", "projeto",
+    "tema", "tema_secundario", "tipo_classificacao", "subtipo_classificacao",
+    "projeto",
     "alcance", "impressoes", "visualizacoes", "curtidas", "comentarios", "compartilhamentos",
     "salvos", "cliques_link", "engajamento", "engajamento_completo", "taxa_engajamento",
     "denominador_tipo", "descricao",
@@ -61,6 +62,8 @@ def _tabela(df: pd.DataFrame) -> dict:
 def _gravar_particoes(base: pd.DataFrame) -> list[dict]:
     posts = base[base["eh_post"]].copy()
     posts["descricao"] = posts["descricao"].str.slice(0, config.DESCRICAO_MAX_CARACTERES)
+    for coluna in ("tipo_classificacao", "subtipo_classificacao"):  # "proposição" = "Proposição"
+        posts[coluna] = posts[coluna].map(lambda v: v[:1].upper() + v[1:] if isinstance(v, str) else v)
     fim = posts["data"].max()
     corte = (fim.to_period("M") - (config.JANELA_MESES_POSTS - 1)).to_timestamp()
     posts = posts[posts["data"] >= corte]

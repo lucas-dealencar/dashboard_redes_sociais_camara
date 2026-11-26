@@ -37,7 +37,7 @@ interface BenchmarkJson {
 interface PostRow {
   data: string; rede: string; perfil: string | null; link: string; formato: string | null; formato_nativo: string | null;
   colab: boolean | null; ao_vivo: boolean | null; tema: string | null; tema_secundario: string | null;
-  tipo_classificacao: string | null; projeto: string | null;
+  tipo_classificacao: string | null; subtipo_classificacao?: string | null; projeto: string | null;
   alcance: number | null; impressoes: number | null; visualizacoes: number | null;
   curtidas: number | null; comentarios: number | null; compartilhamentos: number | null; salvos: number | null; cliques_link: number | null;
   engajamento: number | null; engajamento_completo: boolean | null; taxa_engajamento: number | null; denominador_tipo: string | null;
@@ -132,7 +132,7 @@ export class PipelineDataSource implements DataSource {
           title: titleOf(r.descricao, r.rede, r.formato ?? 'Não informado'), caption: r.descricao ?? '', url: r.link,
           format, themeId: themeId(tema), secondaryThemeIds: r.tema_secundario && r.tema_secundario !== tema ? [themeId(r.tema_secundario)] : [],
           campaign: null, paid: false, durationSec: null, editorialId: '',
-          classification: r.tipo_classificacao, project: r.projeto, live: r.ao_vivo, colab: !!r.colab, nativeFormat: r.formato_nativo,
+          classification: r.tipo_classificacao, subclassification: r.subtipo_classificacao ?? null, project: r.projeto, live: r.ao_vivo, colab: !!r.colab, nativeFormat: r.formato_nativo,
           metrics: {
             reach: r.alcance, views: r.visualizacoes, impressions: r.impressoes,
             likes: r.curtidas, comments: r.comentarios, shares: r.compartilhamentos, saves: r.salvos, clicks: r.cliques_link,

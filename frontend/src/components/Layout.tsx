@@ -20,7 +20,7 @@ import rodape from '../assets/rodape-camara.png';
 export const TABS: { id: TabId; label: string; sub: string }[] = [
   { id: 'visao', label: 'Visão geral', sub: 'Resultados consolidados e comparação entre redes' },
   { id: 'evolucao', label: 'Evolução e redes', sub: 'Séries históricas, KPIs por rede e picos' },
-  { id: 'conteudos', label: 'Conteúdos', sub: 'Por publicação, tema, formato e rede' },
+  { id: 'conteudos', label: 'Classificação', sub: 'Tipo, subtipo, tema, formato e publicações' },
   { id: 'publico', label: 'Público', sub: 'Perfil demográfico e comportamento' },
 ];
 
@@ -212,7 +212,8 @@ export function PostDetail({ post: p, onChange }: { post: Post; onChange: (p: Po
         <dd><Select label="Tema principal" value={p.themeId} options={ds.themes.map((t) => ({ id: t.id, label: t.name }))} onChange={(v) => { setPostTheme(p.id, v); onChange({ ...p, themeId: v }); }} /> <span className="small muted">editável pela equipe</span></dd>
         {row('Temas secundários', p.secondaryThemeIds.length ? p.secondaryThemeIds.map((id) => ds.themes.find((t) => t.id === id)?.name).join(', ') : '—')}
         {row('Formato na planilha', p.nativeFormat ? `${p.nativeFormat}${p.colab ? ' (colab)' : ''}` : null)}
-        {row('Classificação', p.classification)}
+        {row('Tipo de classificação', p.classification)}
+        {row('Subtipo de classificação', p.subclassification)}
         {row('Projeto?', p.project)}
         {row('Ao vivo?', yn(p.live))}
       </dl>

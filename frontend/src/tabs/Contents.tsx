@@ -7,6 +7,8 @@ import { noteKey } from '../data/notes';
 import { fmtCompact, fmtInt, fmtPct, fmtSec, ND } from '../domain/format';
 import { useStore } from '../state/store';
 import type { FormatId, PlatformId, Post } from '../types';
+import { ClassificationExplorer } from '../components/ClassificationExplorer';
+import { matchesPick, type ClassPick } from '../domain/classification';
 import { Section, Panel, Well, Note, Select, Segmented, ExportButtons, DataTable, PlatformBadge, PlatformLogo, Empty, Modal, type Col } from '../components/ui/ui';
 import { Columns, HBars, HeatTable, PngButton, Scatter, SwatchLegend } from '../components/charts/charts';
 import type { Table } from '../utils/export';
@@ -34,6 +36,7 @@ export function Contents() {
   const [cell, setCell] = useState<{ r: string; c: string } | null>(null);
   const [barStat, setBarStat] = useState<'volume' | 'total' | 'media' | 'mediana' | 'taxa'>('media');
   const [search, setSearch] = useState('');
+  const [classPick, setClassPick] = useState<ClassPick & { others: string[] }>({ type: null, sub: null, others: [] });
   const [themeSel, setThemeSel] = useState('');
 
   const all = useMemo(() => filterPosts(ds, sel, range.start, range.end).filter((p) => active.includes(p.platform)), [ds, sel, range, active.join()]);
@@ -48,9 +51,10 @@ export function Contents() {
   const filtered = useMemo(() => {
     let ps = posts;
     if (cell) ps = ps.filter((p) => p.themeId === cell.r && p.format === cell.c);
-    if (search.trim()) { const q = search.toLowerCase(); ps = ps.filter((p) => p.caption.toLowerCase().includes(q) || p.title.toLowerCase().includes(q) || p.url.toLowerCase().includes(q) || (p.classification ?? '').toLowerCase().includes(q)); }
+    if (classPick.type) ps = ps.filter((p) => matchesPick(p, classPick, classPick.others));
+    if (search.trim()) { const q = search.toLowerCase(); ps = ps.filter((p) => p.caption.toLowerCase().includes(q) || p.title.toLowerCase().includes(q) || p.url.toLowerCase().includes(q) || (p.classification ?? '').toLowerCase().includes(q) || (p.subclassification ?? '').toLowerCase().includes(q)); }
     return ps;
-  }, [posts, cell, search]);
+  }, [posts, cell, search, classPick]);
   const rankMetric: PostMetricId = net === 'all' ? (metric === 'kpi' ? 'engagement' : metric) : 'kpi';
   const ranked = useMemo(() => [...filtered].sort((a, b) => (postMetric(b, rankMetric) ?? -1) - (postMetric(a, rankMetric) ?? -1)), [filtered, rankMetric]);
 
@@ -68,7 +72,9 @@ export function Contents() {
   const statLabel = barStat === 'volume' ? 'Volume de publicações' : barStat === 'taxa' ? 'Taxa de engajamento (agregada)' : `${mdef.label} — ${barStat === 'total' ? 'total' : barStat === 'media' ? 'média por publicação' : 'mediana por publicação'}`;
 
   const cols: Col<Post>[] = [
-    { id: 't', label: 'Publicação', render: (p) => <span><b>{p.title}</b>{noteOf(p) && <> <span className="annot" title={noteOf(p)!.text}>Anotação</span></>}<br /><small className="muted">{ds.profiles.find((x) => x.id === p.profileId)?.name}{p.classification ? ` · ${p.classification}` : ''}{p.live ? ' · ao vivo' : ''}</small></span>, sort: (p) => p.title },
+    { id: 't', label: 'Publicação', render: (p) => <span><b>{p.title}</b>{noteOf(p) && <> <span className="annot" title={noteOf(p)!.text}>Anotação</span></>}<br /><small className="muted">{ds.profiles.find((x) => x.id === p.profileId)?.name}{p.live ? ' · ao vivo' : ''}</small></span>, sort: (p) => p.title },
+    { id: 'ct', label: 'Tipo', render: (p) => p.classification ?? <span className="nd">{ND}</span>, sort: (p) => p.classification },
+    { id: 'cs', label: 'Subtipo', render: (p) => p.subclassification ?? <span className="nd">{ND}</span>, sort: (p) => p.subclassification },
     { id: 'r', label: 'Rede', render: (p) => <PlatformBadge id={p.platform} />, sort: (p) => p.platform },
     { id: 'f', label: 'Formato', render: (p) => FORMAT_BY_ID[p.format].name, sort: (p) => p.format },
     { id: 'th', label: 'Tema', render: (p) => themeName(p.themeId), sort: (p) => themeName(p.themeId) },
@@ -81,8 +87,8 @@ export function Contents() {
     { id: 'tx', label: 'Taxa', num: true, render: (p) => { const v = postMetric(p, 'er'); const d = erDenominator(p); return v === null ? <span className="nd">{ND}</span> : <span title={`Base: ${d?.base}`}>{fmtPct(v, 2)}</span>; }, sort: (p) => postMetric(p, 'er') },
     { id: 'l', label: 'Link', render: (p) => <a className="link" href={p.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>abrir</a> },
   ];
-  const exportRank = (): Table => ({ name: 'ranking-publicacoes', headers: ['Data', 'Rede', 'Perfil', 'Descrição', 'Formato', 'Formato na planilha', 'Tema', 'Classificação', 'Projeto?', 'Ao vivo?', 'Alcance', 'Visualizações', 'Impressões', 'Curtidas', 'Comentários', 'Compartilhamentos', 'Salvamentos', 'Cliques no link', 'Engajamento', 'Taxa de engajamento (%)', 'Base da taxa', 'Link', 'Anotação'],
-    rows: ranked.map((p) => [p.date, PLATFORM_BY_ID[p.platform].name, ds.profiles.find((x) => x.id === p.profileId)?.name, p.caption, FORMAT_BY_ID[p.format].name, p.nativeFormat, themeName(p.themeId), p.classification, p.project, p.live === null ? null : p.live ? 'Sim' : 'Não', p.metrics.reach, p.metrics.views, p.metrics.impressions, p.metrics.likes, p.metrics.comments, p.metrics.shares, p.metrics.saves, p.metrics.clicks, p.metrics.engagement, p.metrics.er, p.metrics.erBase === 'reach' ? 'alcance' : p.metrics.erBase === 'impressions' ? 'impressões' : p.metrics.erBase === 'views' ? 'visualizações' : null, p.url, noteOf(p)?.text ?? null]) });
+  const exportRank = (): Table => ({ name: 'ranking-publicacoes', headers: ['Data', 'Rede', 'Perfil', 'Descrição', 'Formato', 'Formato na planilha', 'Tema', 'Tipo de classificação', 'Subtipo de classificação', 'Projeto?', 'Ao vivo?', 'Alcance', 'Visualizações', 'Impressões', 'Curtidas', 'Comentários', 'Compartilhamentos', 'Salvamentos', 'Cliques no link', 'Engajamento', 'Taxa de engajamento (%)', 'Base da taxa', 'Link', 'Anotação'],
+    rows: ranked.map((p) => [p.date, PLATFORM_BY_ID[p.platform].name, ds.profiles.find((x) => x.id === p.profileId)?.name, p.caption, FORMAT_BY_ID[p.format].name, p.nativeFormat, themeName(p.themeId), p.classification, p.subclassification, p.project, p.live === null ? null : p.live ? 'Sim' : 'Não', p.metrics.reach, p.metrics.views, p.metrics.impressions, p.metrics.likes, p.metrics.comments, p.metrics.shares, p.metrics.saves, p.metrics.clicks, p.metrics.engagement, p.metrics.er, p.metrics.erBase === 'reach' ? 'alcance' : p.metrics.erBase === 'impressions' ? 'impressões' : p.metrics.erBase === 'views' ? 'visualizações' : null, p.url, noteOf(p)?.text ?? null]) });
   const exportMatrix = (): Table => ({ name: 'matriz-tema-formato', headers: ['Tema', ...formats.flatMap((f) => [`${f.name} — ${mdef.label}`, `${f.name} — n`])],
     rows: themes.map((t) => [t.name, ...formats.flatMap((f) => { const a = aggregate(cellPosts(t.id, f.id), metric, agg); return [a.value, a.n]; })]) });
 
@@ -97,6 +103,8 @@ export function Contents() {
         </div>
         <p className="small muted" style={{ marginTop: 10 }}>{fmtInt(posts.length)} publicações no recorte · {fmtInt(coverage)} com a métrica “{mdef.label}” disponível{coverage < posts.length ? ` (${fmtInt(posts.length - coverage)} em redes que não a fornecem, fora da conta)` : ''} · {mdef.label} {agg === 'media' ? 'médio' : agg === 'mediana' ? 'mediano' : 'total'}: <b>{fmtMetric(totalAgg.value, metric)}</b></p>
       </Panel>
+
+      <ClassificationExplorer posts={posts} minN={minN} pick={classPick} onPick={(pick, others) => setClassPick({ ...pick, others })} />
 
       <Section title="Matriz de desempenho por tema e formato" sub="Clique em uma célula para ver os conteúdos que compõem o resultado">
         <Panel title={`${net === 'all' ? 'Redes selecionadas' : PLATFORM_BY_ID[net].name} · ${mdef.label}${agg === 'media' ? ' médio' : agg === 'mediana' ? ' mediano' : ''} por publicação`} tools={<ExportButtons table={exportMatrix} />}>
@@ -123,7 +131,8 @@ export function Contents() {
       </Section>
 
       <Section title="Ranking de publicações" id="ranking" sub={net === 'all' ? 'Em todas as redes, o ranking usa a métrica escolhida; para o KPI principal, selecione uma rede' : `Ordenado pelo KPI principal de ${PLATFORM_BY_ID[net].name}: ${PLATFORM_BY_ID[net].kpiLabel}`}>
-        <Panel light title="Publicações" tools={<><input className="inp" placeholder="Buscar texto, link ou classificação" aria-label="Buscar publicações" value={search} onChange={(e) => setSearch(e.target.value)} /><ExportButtons table={exportRank} /></>}>
+        <Panel light title="Publicações" tools={<><input className="inp" placeholder="Buscar texto, link, tipo ou subtipo" aria-label="Buscar publicações" value={search} onChange={(e) => setSearch(e.target.value)} /><ExportButtons table={exportRank} /></>}>
+          {classPick.type && <div className="flex" style={{ marginBottom: 10 }}><span className="pill req">Classificação: {classPick.type}{classPick.sub ? ` › ${classPick.sub === '__outros__' ? 'Outros subtipos' : classPick.sub}` : ''}</span><button className="btn sm" onClick={() => setClassPick({ type: null, sub: null, others: [] })}>Limpar</button></div>}
           {cell && <div className="flex" style={{ marginBottom: 10 }}><span className="pill req">Filtro da matriz: {themeName(cell.r)} × {FORMAT_BY_ID[cell.c as FormatId].name}</span><button className="btn sm" onClick={() => setCell(null)}>Limpar</button></div>}
           <DataTable rows={ranked} cols={cols} rowKey={(p) => p.id} onRowClick={setOpenPost} pageSize={10} />
           <p className="small muted" style={{ marginTop: 8 }}>Clique em uma linha para ver o detalhe, o link e reclassificar o tema (ajuste local; a fonte oficial do tema é a planilha). “Sem tema” = publicação sem proposição vinculada.</p>

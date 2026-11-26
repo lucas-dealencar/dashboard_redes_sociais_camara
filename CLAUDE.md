@@ -2,7 +2,7 @@
 
 Pipeline Prefect que lê a planilha **Consolidado Redes Sociais - Simplificado** (Google Sheets, ~80 mil linhas), limpa, transforma, agrega e publica JSONs via `git push`. O dashboard estático em `docs/` (GitHub Pages, branch `main`, pasta `/docs`) consome esses JSONs; o código-fonte do front fica em `frontend/` (React + TypeScript + Vite) e o build é gravado em `docs/`. Não há banco nem backend: os JSONs versionados são a fonte do site.
 
-Escopo funcional: ver a proposta "Dashboard integrado de redes sociais" (nov/2026). Redes: Instagram, Facebook, TikTok, X, Threads, Bluesky, LinkedIn (+ YouTube/Shorts, que aparecem na planilha). Abas do dashboard: Visão geral, Evolução e redes, Conteúdos, Público.
+Escopo funcional: ver a proposta "Dashboard integrado de redes sociais" (nov/2026). Redes: Instagram, Facebook, TikTok, X, Threads, Bluesky, LinkedIn (+ YouTube/Shorts, que aparecem na planilha). Abas do dashboard: Visão geral, Evolução e redes, Classificação (antes "Conteúdos"; id interno `conteudos`), Público.
 
 ## Fluxo
 

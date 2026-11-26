@@ -70,6 +70,7 @@ export interface Post {
   editorialId: string;
   /** campos de classificação da planilha (null = não informado) */
   classification: string | null;
+  subclassification: string | null;
   project: string | null;
   live: boolean | null;
   colab: boolean;
