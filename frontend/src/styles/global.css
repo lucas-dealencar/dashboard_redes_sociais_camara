@@ -397,11 +397,7 @@ button.effort-row:hover { background: #eef6f6; }
 /* escala geral no computador: mesma leitura do navegador em 90% */
 html[data-device=desktop] { zoom: .9; }
 
-/* mapa da classificação e esforço × retorno lado a lado */
-.class-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+/* esforço × retorno abaixo do mapa da classificação, no mesmo painel */
+.class-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .class-effort { min-width: 0; }
 .class-effort h3 { margin: 0 0 10px; font-size: 13.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
-.class-split .effort-row { grid-template-columns: minmax(0, 1fr) minmax(100px, 170px) minmax(0, 1fr) 52px; gap: 8px; }
-@media (max-width: 1100px) { .class-split { grid-template-columns: minmax(0, 1fr); } }
-[data-device=mobile] .class-split { grid-template-columns: minmax(0, 1fr); }
-[data-device=mobile] .class-split .effort-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 50px; }

@@ -23,7 +23,7 @@ export interface ClassGroup {
   members: string[];
 }
 
-function median(values: number[]): number | null {
+export function median(values: number[]): number | null {
   if (!values.length) return null;
   const v = [...values].sort((a, b) => a - b), m = v.length >> 1;
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
