@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FORMAT_BY_ID } from '../data/catalog';
+import { FORMAT_BY_ID, PLATFORM_BY_ID } from '../data/catalog';
 import { postEngagement } from '../domain/aggregate';
 import { fmtDMY } from '../domain/dates';
 import { groupClasses, matchesPick, OTHERS, squarify, subOf, typeOf, type ClassGroup, type ClassPick } from '../domain/classification';
 import { fmtCompact, fmtInt, fmtPct, fmtShare, ND } from '../domain/format';
 import { postMetric } from '../domain/contentStats';
+import { scatterPoints, type ScatterPoint } from '../domain/outliers';
 import { useStore } from '../state/store';
-import type { Post } from '../types';
+import type { PlatformId, Post } from '../types';
 import type { Table } from '../utils/export';
 import { PngButton, useWidth } from './charts/charts';
 import { HEAT, heatColor } from './charts/scale';
@@ -14,8 +15,7 @@ import { Info } from './ui/Info';
 import { DataTable, Empty, ExportButtons, Panel, PlatformBadge, Section, Segmented, Well, type Col } from './ui/ui';
 
 type Size = 'posts' | 'engagement';
-type Stat = 'media' | 'mediana';
-const STAT_LABEL: Record<Stat, string> = { media: 'média', mediana: 'mediana' };
+type Outliers = 'com' | 'sem';
 
 const FONT = 'DM Sans, Arial, sans-serif';
 const MANY = 1.2, FEW = 0.8; // retorno ÷ esforço: acima rende mais que o volume; abaixo, menos
@@ -31,10 +31,10 @@ function wrap(text: string, chars: number): string[] {
   return [first, rest.length > chars ? `${rest.slice(0, Math.max(1, chars - 1))}…` : rest];
 }
 
-function Treemap({ groups, size, stat, minN, picked, onPick, aria }: { groups: ClassGroup[]; size: Size; stat: Stat; minN: number; picked: string | null; onPick: (g: ClassGroup) => void; aria: string }) {
+function Treemap({ groups, size, minN, picked, onPick, aria }: { groups: ClassGroup[]; size: Size; minN: number; picked: string | null; onPick: (g: ClassGroup) => void; aria: string }) {
   const [ref, W] = useWidth();
   const H = 320;
-  const value = (g: ClassGroup) => (stat === 'media' ? g.perPost : g.medianPerPost);
+  const value = (g: ClassGroup) => g.perPost;
   const sorted = [...groups].filter((g) => g[size] > 0).sort((a, b) => b[size] - a[size]);
   const rects = squarify(sorted.map((g) => g[size]), { x: 0, y: 0, w: W, h: H });
   // "Outros" não define a escala de cor: é uma mistura
@@ -50,7 +50,7 @@ function Treemap({ groups, size, stat, minN, picked, onPick, aria }: { groups: C
           const name = r.w > 54 && r.h > 30 ? wrap(g.label, chars) : [];
           const showName = name.slice(0, r.h > 46 ? 2 : 1);
           const valueY = r.y + 20 + showName.length * 15 + 8;
-          const tip = `${g.label}: ${fmtInt(g.posts)} publicações · engajamento ${fmtInt(g.engagement)} · ${STAT_LABEL[stat]} por publicação ${v === null ? ND : fmtCompact(v)}`;
+          const tip = `${g.label}: ${fmtInt(g.posts)} publicações · engajamento ${fmtInt(g.engagement)} · média por publicação ${v === null ? ND : fmtCompact(v)}`;
           return (
             <g key={g.key} className="tile" role="button" tabIndex={0} aria-label={tip} aria-pressed={picked === g.key} opacity={g.posts < minN ? 0.55 : 1}
               onClick={() => onPick(g)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(g); } }}>
@@ -63,36 +63,28 @@ function Treemap({ groups, size, stat, minN, picked, onPick, aria }: { groups: C
                 </text>
               )}
               {showName.length > 0 && r.w > 120 && valueY + 18 < r.y + r.h - 4 && (
-                <text x={r.x + 10} y={valueY + 18} fontSize={11.5} fill={color.fg}>{v === null ? 'engajamento n/d' : `${STAT_LABEL[stat]}: ${fmtCompact(v)}`}</text>
+                <text x={r.x + 10} y={valueY + 18} fontSize={11.5} fill={color.fg}>{v === null ? 'engajamento n/d' : `média: ${fmtCompact(v)}`}</text>
               )}
             </g>
           );
         })}
       </svg>
-      <div className="legend-scale">{`Cor = ${STAT_LABEL[stat]} de engajamento por publicação:`} menor <span style={{ display: 'inline-flex', gap: 2 }}>{HEAT.map((h) => <i key={h} style={{ background: h }} />)}</span> maior · área = {size === 'posts' ? 'publicações' : 'engajamento total'} · blocos esmaecidos = amostra pequena</div>
+      <div className="legend-scale">Cor = engajamento médio por publicação: menor <span style={{ display: 'inline-flex', gap: 2 }}>{HEAT.map((h) => <i key={h} style={{ background: h }} />)}</span> maior · área = {size === 'posts' ? 'publicações' : 'engajamento total'} · blocos esmaecidos = amostra pequena</div>
     </div>
   );
 }
 
-/**
- * Esforço (% das publicações) frente a retorno (% do engajamento), em barras espelhadas. Na média, o
- * retorno é a fatia do engajamento somado. Na mediana, cada grupo pesa "mediana × publicações", o
- * que tira o efeito das publicações fora da curva; as fatias continuam somando 100%.
- */
-function EffortReturn({ groups, stat, minN, picked, onPick }: { groups: ClassGroup[]; stat: Stat; minN: number; picked: string | null; onPick: (g: ClassGroup) => void }) {
+/** Esforço (% das publicações) frente a retorno (% do engajamento), em barras espelhadas. */
+function EffortReturn({ groups, minN, picked, onPick }: { groups: ClassGroup[]; minN: number; picked: string | null; onPick: (g: ClassGroup) => void }) {
   const rows = groups.filter((g) => g.withEngagement > 0);
-  const byMedian = stat === 'mediana';
-  const typical = (g: ClassGroup) => (g.medianPerPost ?? 0) * g.withEngagement;
-  const totalTypical = rows.reduce((t, g) => t + typical(g), 0);
-  const returnOf = (g: ClassGroup) => (!byMedian ? g.shareEngagement : totalTypical ? typical(g) / totalTypical : 0);
-  const max = Math.max(1e-9, ...rows.flatMap((g) => [g.sharePosts, returnOf(g)]));
+  const max = Math.max(1e-9, ...rows.flatMap((g) => [g.sharePosts, g.shareEngagement]));
   if (!rows.length) return <Empty>Sem engajamento disponível para comparar neste recorte.</Empty>;
   return (
     <div className="effort">
-      <div className="effort-row effort-head"><span>% das publicações</span><span /><span>{byMedian ? '% do engajamento (pela mediana)' : '% do engajamento'}</span><span /></div>
+      <div className="effort-row effort-head"><span>% das publicações</span><span /><span>% do engajamento</span><span /></div>
       {rows.map((g) => {
-        const back = returnOf(g);
-        const ratio = g.sharePosts && (!byMedian || totalTypical) ? back / g.sharePosts : null;
+        const back = g.shareEngagement;
+        const ratio = g.sharePosts ? back / g.sharePosts : null;
         const small = g.withEngagement < minN;
         const cls = small || ratio === null ? 'flat' : ratio >= MANY ? 'up' : ratio <= FEW ? 'down' : 'flat';
         return (
@@ -105,6 +97,50 @@ function EffortReturn({ groups, stat, minN, picked, onPick }: { groups: ClassGro
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Dispersão base × engajamento (log nos dois eixos); clicar numa bolinha abre a publicação. */
+function OutlierScatter({ points, focus, onOpen }: { points: ScatterPoint[]; focus: ((p: Post) => boolean) | null; onOpen: (p: Post) => void }) {
+  const [ref, W] = useWidth();
+  const [hov, setHov] = useState<ScatterPoint | null>(null);
+  const H = 360, L = 58, R = 14, TOP = 12, B = 42;
+  const pts = points.filter((q) => q.base !== null);
+  const lg = (v: number) => Math.log10(1 + v);
+  const xMax = Math.max(1, Math.ceil(Math.max(0, ...pts.map((q) => lg(q.base as number))))), yMax = Math.max(1, Math.ceil(Math.max(0, ...pts.map((q) => lg(q.engagement)))));
+  const px = (v: number) => L + (lg(v) / xMax) * (W - L - R);
+  const py = (v: number) => TOP + (H - TOP - B) * (1 - lg(v) / yMax);
+  const ticks = (n: number) => Array.from({ length: n + 1 }, (_, i) => (i === 0 ? 0 : 10 ** i));
+  const nets = [...new Set(pts.map((q) => q.post.platform))] as PlatformId[];
+  // outliers por último, para ficarem por cima
+  const ordered = [...pts].sort((a, b) => Number(a.outlier) - Number(b.outlier));
+  const tip = (q: ScatterPoint) => `${q.post.title} — ${PLATFORM_BY_ID[q.post.platform].name}: engajamento ${fmtInt(q.engagement)} · base ${fmtCompact(q.base as number)}${q.outlier ? ' · fora do agrupamento' : ''}`;
+  if (!pts.length) return <Empty>Nenhuma publicação com alcance, visualizações ou impressões para desenhar a dispersão.</Empty>;
+  return (
+    <div className="chart" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="group" aria-label="Dispersão das publicações: base da taxa por engajamento" style={{ display: 'block', fontFamily: FONT }} onMouseLeave={() => setHov(null)}>
+        {ticks(yMax).map((t) => <g key={`y${t}`}><line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke="#b5c9cc" strokeDasharray="3 4" /><text x={L - 8} y={py(t) + 4} textAnchor="end" fontSize={11} fill="#4f6b70">{fmtCompact(t)}</text></g>)}
+        {ticks(xMax).map((t) => <g key={`x${t}`}><line x1={px(t)} x2={px(t)} y1={TOP} y2={H - B} stroke="#b5c9cc" strokeDasharray="3 4" /><text x={px(t)} y={H - B + 16} textAnchor="middle" fontSize={11} fill="#4f6b70">{fmtCompact(t)}</text></g>)}
+        <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" fontSize={12} fontWeight={700} fill="#4f6b70">Base da taxa (alcance, visualizações ou impressões) · escala log</text>
+        <text x={12} y={TOP + (H - TOP - B) / 2} textAnchor="middle" fontSize={12} fontWeight={700} fill="#4f6b70" transform={`rotate(-90 12 ${TOP + (H - TOP - B) / 2})`}>Engajamento · escala log</text>
+        {ordered.map((q) => {
+          const c = PLATFORM_BY_ID[q.post.platform].color;
+          const dim = focus && !focus(q.post);
+          return (
+            <circle key={q.post.id} className="dot" cx={px(q.base as number)} cy={py(q.engagement)} r={q.outlier ? 5.5 : 4}
+              fill={q.outlier ? '#fff' : c} fillOpacity={q.outlier ? 1 : 0.55} stroke={q.outlier ? '#c3423b' : c} strokeWidth={q.outlier ? 2.2 : 1}
+              opacity={dim ? 0.15 : 1} onMouseEnter={() => setHov(q)} onClick={() => onOpen(q.post)}>
+              <title>{tip(q)}</title>
+            </circle>
+          );
+        })}
+      </svg>
+      {hov && <div className="tip" style={{ left: Math.min(px(hov.base as number) + 10, W - 290), top: Math.max(0, py(hov.engagement) - 60) }}>{tip(hov)}<br /><small>Clique para abrir a publicação</small></div>}
+      <div className="legend-scale" style={{ flexWrap: 'wrap' }}>
+        {nets.map((n) => <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ background: PLATFORM_BY_ID[n].color, borderRadius: '50%' }} />{PLATFORM_BY_ID[n].name}</span>)}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ background: '#fff', border: '2px solid #c3423b', borderRadius: '50%' }} />fora do agrupamento (outlier)</span>
+      </div>
     </div>
   );
 }
@@ -140,9 +176,15 @@ interface Props {
   onPick: (pick: ClassPick, others: string[]) => void;
 }
 
-export function ClassificationExplorer({ posts, minN, pick, onPick }: Props) {
+export function ClassificationExplorer({ posts: all, minN, pick, onPick }: Props) {
   const [size, setSize] = useState<Size>('posts');
-  const [stat, setStat] = useState<Stat>('media');
+  const [mode, setMode] = useState<Outliers>('com');
+  const [showScatter, setShowScatter] = useState(false);
+  const { setOpenPost } = useStore();
+  // outliers avaliados no recorte inteiro, cada publicação contra o agrupamento da sua rede
+  const points = useMemo(() => scatterPoints(all), [all]);
+  const outlierIds = useMemo(() => new Set(points.filter((q) => q.outlier).map((q) => q.post.id)), [points]);
+  const posts = useMemo(() => (mode === 'sem' ? all.filter((p) => !outlierIds.has(p.id)) : all), [all, mode, outlierIds]);
   const ref = useRef<HTMLDivElement>(null);
   const types = useMemo(() => groupClasses(posts, typeOf), [posts]);
   const type = pick.type && types.some((t) => t.key === pick.type) ? pick.type : null;
@@ -168,24 +210,39 @@ export function ClassificationExplorer({ posts, minN, pick, onPick }: Props) {
     detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [pick.type, pick.sub]);
 
+  // a dispersão mostra o nível aberto; o subtipo escolhido fica em destaque
+  const levelPoints = useMemo(() => (type ? points.filter((q) => typeOf(q.post) === type) : points), [points, type]);
+  const focus = sub ? (p: Post) => matchesPick(p, { type, sub: sub.key }, sub.members) : null;
+  const levelOutliers = levelPoints.filter((q) => q.outlier).length;
+
   const table = (): Table => ({
     name: 'classificacao',
-    headers: ['Tipo de classificação', 'Subtipo de classificação', 'Publicações', 'Publicações com engajamento', 'Engajamento', 'Engajamento médio por publicação', 'Engajamento mediano por publicação'],
-    rows: types.flatMap((t) => groupClasses(posts.filter((p) => typeOf(p) === t.key), subOf).map((s) => [t.key, s.key, s.posts, s.withEngagement, s.engagement, s.perPost === null ? null : Math.round(s.perPost * 10) / 10, s.medianPerPost])),
+    headers: ['Tipo de classificação', 'Subtipo de classificação', 'Publicações', 'Publicações com engajamento', 'Engajamento', 'Engajamento médio por publicação'],
+    rows: types.flatMap((t) => groupClasses(posts.filter((p) => typeOf(p) === t.key), subOf).map((s) => [t.key, s.key, s.posts, s.withEngagement, s.engagement, s.perPost === null ? null : Math.round(s.perPost * 10) / 10])),
   });
 
   const where = type ?? 'Todos os tipos';
   return (
     <Section title="Mapa da classificação" sub="Clique em um tipo para abrir os subtipos e ver as publicações com mais engajamento; clique em um subtipo para detalhar só ele (o ranking de publicações acompanha)">
       <Panel title={type ? <><button type="button" className="crumb" onClick={() => onPick({ type: null, sub: null }, [])}>← Todos os tipos</button> {type}</> : 'Tipos de classificação'}
-          tools={<><Segmented value={size} label="Tamanho dos blocos" options={[{ id: 'posts', label: 'Publicações' }, { id: 'engagement', label: 'Engajamento' }]} onChange={setSize} /><Segmented value={stat} label="Engajamento por publicação" options={[{ id: 'media', label: 'Média' }, { id: 'mediana', label: 'Mediana' }]} onChange={setStat} /><ExportButtons table={table} /><PngButton target={ref} name="mapa-classificacao" /></>}>
+          tools={<><Segmented value={size} label="Tamanho dos blocos" options={[{ id: 'posts', label: 'Publicações' }, { id: 'engagement', label: 'Engajamento' }]} onChange={setSize} /><Segmented value={mode} label="Outliers" options={[{ id: 'com', label: 'Com outliers' }, { id: 'sem', label: `Sem outliers (${fmtInt(outlierIds.size)})` }]} onChange={setMode} /><ExportButtons table={table} /><PngButton target={ref} name="mapa-classificacao" /></>}>
         {groups.length ? (
           <div className="class-stack">
-            <Well><div ref={ref}><Treemap aria={`Mapa de classificação: ${where}`} groups={groups} size={size} stat={stat} minN={minN} picked={picked} onPick={choose} /></div></Well>
+            <Well><div ref={ref}><Treemap aria={`Mapa de classificação: ${where}`} groups={groups} size={size} minN={minN} picked={picked} onPick={choose} /></div></Well>
             <div className="well class-effort">
-              <h3>Esforço × retorno<Info>{stat === 'media' ? 'Compara a fatia das publicações com a fatia do engajamento somado.' : 'Mediana: o engajamento de cada grupo é estimado como mediana por publicação × número de publicações, e depois convertido em percentual. Assim, publicações fora da curva não distorcem a fatia.'} 2,0× = rende o dobro do volume que ocupa. Considera só publicações com engajamento disponível.</Info></h3>
-              <EffortReturn groups={groups} stat={stat} minN={minN} picked={picked} onPick={(g) => { reveal.current = true; choose(g); }} />
+              <h3>Esforço × retorno<Info>Compara a fatia das publicações com a fatia do engajamento somado. 2,0× = rende o dobro do volume que ocupa. Considera só publicações com engajamento disponível. Use “Sem outliers” para tirar as publicações fora do agrupamento da sua rede (veja a dispersão abaixo).</Info></h3>
+              <EffortReturn groups={groups} minN={minN} picked={picked} onPick={(g) => { reveal.current = true; choose(g); }} />
+              {mode === 'sem' && outlierIds.size > 0 && <p className="small muted" style={{ marginTop: 8 }}>{fmtInt(outlierIds.size)} publicações fora do agrupamento da sua rede foram retiradas do mapa, do esforço × retorno e do detalhamento.</p>}
+              <button type="button" className="scatter-toggle" aria-expanded={showScatter} onClick={() => setShowScatter((v) => !v)}>
+                <span className="fc-chev" aria-hidden>{showScatter ? '▴' : '▾'}</span> {showScatter ? 'Ocultar' : 'Ver'} a dispersão das publicações{levelOutliers > 0 ? ` · ${fmtInt(levelOutliers)} outliers` : ''}
+              </button>
             </div>
+            {showScatter && (
+              <div className="well class-effort">
+                <h3>Agrupamento das publicações · {sub ? `${type} › ${sub.label}` : where}<Info>Cada bolinha é uma publicação: base da taxa no eixo horizontal e engajamento no vertical, em escala logarítmica. Cada rede forma o seu agrupamento; é outlier a publicação muito distante do centro do agrupamento da sua rede (distância de Mahalanobis robusta, limite de 99,9%), considerando a relação entre base e engajamento. Publicações sem base são avaliadas só pelo engajamento e não aparecem no gráfico. Clique numa bolinha para abrir a publicação.</Info></h3>
+                <OutlierScatter points={levelPoints} focus={focus} onOpen={setOpenPost} />
+              </div>
+            )}
             {type && <div ref={detailRef}><TopPosts posts={detail} title={sub ? `${type} › ${sub.label}` : type} showSub={!sub || sub.key === OTHERS} /></div>}
           </div>
         ) : <Empty>Sem publicações para os filtros atuais.</Empty>}

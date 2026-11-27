@@ -15,7 +15,6 @@ export interface ClassGroup {
   withEngagement: number;
   engagement: number;
   perPost: number | null;
-  medianPerPost: number | null;
   /** participação no total do nível (0..1) */
   sharePosts: number;
   shareEngagement: number;
@@ -23,24 +22,18 @@ export interface ClassGroup {
   members: string[];
 }
 
-function median(values: number[]): number | null {
-  if (!values.length) return null;
-  const v = [...values].sort((a, b) => a - b), m = v.length >> 1;
-  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
-}
-
 export const typeOf = (p: Post) => p.classification || NO_CLASS;
 export const subOf = (p: Post) => p.subclassification || NO_CLASS;
 
 /** Agrupa por tipo (ou por subtipo dentro de um tipo), do maior para o menor em publicações. */
 export function groupClasses(posts: Post[], keyOf: (p: Post) => string, limit = false): ClassGroup[] {
-  const map = new Map<string, { posts: number; withEngagement: number; engagement: number; values: number[] }>();
+  const map = new Map<string, { posts: number; withEngagement: number; engagement: number }>();
   for (const p of posts) {
     const k = keyOf(p);
-    const g = map.get(k) ?? { posts: 0, withEngagement: 0, engagement: 0, values: [] };
+    const g = map.get(k) ?? { posts: 0, withEngagement: 0, engagement: 0 };
     const e = postEngagement(p);
     g.posts += 1;
-    if (e !== null) { g.withEngagement += 1; g.engagement += e; g.values.push(e); }
+    if (e !== null) { g.withEngagement += 1; g.engagement += e; }
     map.set(k, g);
   }
   let rows = [...map.entries()].map(([key, g]) => ({ key, label: key, members: [key], ...g })).sort((a, b) => b.posts - a.posts);
@@ -49,14 +42,12 @@ export function groupClasses(posts: Post[], keyOf: (p: Post) => string, limit = 
     rows = [...rows.slice(0, MAX_SUBTYPES), {
       key: OTHERS, label: `Outros (${rest.length} subtipos)`, members: rest.map((r) => r.key),
       posts: rest.reduce((s, r) => s + r.posts, 0), withEngagement: rest.reduce((s, r) => s + r.withEngagement, 0), engagement: rest.reduce((s, r) => s + r.engagement, 0),
-      values: rest.flatMap((r) => r.values),
     }];
   }
   const totalWith = rows.reduce((s, r) => s + r.withEngagement, 0) || 1;
   const totalEng = rows.reduce((s, r) => s + r.engagement, 0) || 1;
-  return rows.map(({ values, ...r }) => ({
+  return rows.map((r) => ({
     ...r,
-    medianPerPost: median(values),
     perPost: r.withEngagement ? r.engagement / r.withEngagement : null,
     // esforço comparado só entre publicações que têm engajamento, para as duas barras terem a mesma base
     sharePosts: r.withEngagement / totalWith,
