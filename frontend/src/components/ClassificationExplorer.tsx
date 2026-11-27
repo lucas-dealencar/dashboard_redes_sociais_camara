@@ -115,9 +115,9 @@ function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoin
   // outliers por último, para ficarem por cima
   const ordered = [...pts].sort((a, b) => Number(a.outlier) - Number(b.outlier));
   const tip = (q: ScatterPoint) => `${q.post.title} — ${PLATFORM_BY_ID[q.post.platform].name}: engajamento ${fmtInt(q.engagement)} · base ${fmtCompact(q.base as number)}${q.outlier ? ' · fora do agrupamento' : ''}`;
-  if (!pts.length) return <Empty>Nenhuma publicação com alcance, visualizações ou impressões para desenhar a dispersão.</Empty>;
   return (
     <div className="chart" ref={ref}>
+      {!pts.length ? <Empty>Nenhuma publicação desta rede tem alcance, visualizações ou impressões; sem base, não há dispersão para desenhar (os outliers dela são avaliados só pelo engajamento).</Empty> : <>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="group" aria-label="Dispersão das publicações: base da taxa por engajamento" style={{ display: 'block', fontFamily: FONT }} onMouseLeave={() => setHov(null)}>
         {ticks(yMax).map((t) => <g key={`y${t}`}><line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke="#b5c9cc" strokeDasharray="3 4" /><text x={L - 8} y={py(t) + 4} textAnchor="end" fontSize={11} fill="#4f6b70">{fmtCompact(t)}</text></g>)}
         {ticks(xMax).map((t) => <g key={`x${t}`}><line x1={px(t)} x2={px(t)} y1={TOP} y2={H - B} stroke="#b5c9cc" strokeDasharray="3 4" /><text x={px(t)} y={H - B + 16} textAnchor="middle" fontSize={11} fill="#4f6b70">{fmtCompact(t)}</text></g>)}
@@ -152,6 +152,7 @@ function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoin
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ background: '#fff', border: '2px solid #c3423b', borderRadius: '50%' }} />fora do agrupamento (outlier)</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 18, height: 0, borderTop: '2px dashed #48696f', borderRadius: 0 }} />tendência da rede</span>
       </div>
+      </>}
     </div>
   );
 }
@@ -163,23 +164,11 @@ function OutlierDetail({ points, trends, focus, title }: { points: ScatterPoint[
   const nets = useMemo(() => [...new Set(points.map((q) => q.post.platform))] as PlatformId[], [points]);
   const shown = net !== 'all' && nets.includes(net) ? points.filter((q) => q.post.platform === net) : points;
   const sel = net !== 'all' && nets.includes(net) ? net : 'all';
-  // só os outliers acima da tendência: os que têm engajamento alto demais para a sua base
-  const highs = useMemo(() => shown.filter((q) => q.high).sort((a, b) => b.distance - a.distance), [shown]);
   const byNet = nets.map((n) => {
     const all = points.filter((q) => q.post.platform === n);
     const h = all.filter((q) => q.high).length;
     return { n, h, total: all.length };
   }).filter((r) => r.h > 0).sort((a, b) => b.h - a.h || b.h / b.total - a.h / a.total);
-  const xFor = (q: ScatterPoint) => (q.expected ? q.engagement / Math.max(1, q.expected) : null);
-  const cols: Col<ScatterPoint>[] = [
-    { id: 't', label: 'Publicação', render: (q) => <span><b>{q.post.title}</b><br /><small className="muted">{typeOf(q.post)} › {subOf(q.post)}</small></span> },
-    { id: 'r', label: 'Rede', render: (q) => <PlatformBadge id={q.post.platform} /> },
-    { id: 'd', label: 'Data', render: (q) => fmtDMY(q.post.day), sort: (q) => q.post.day },
-    { id: 'e', label: 'Engajamento', num: true, render: (q) => fmtInt(q.engagement), sort: (q) => q.engagement },
-    { id: 'x', label: 'Esperado pela tendência', num: true, render: (q) => (q.expected === null ? <span className="nd" title="Sem alcance, visualizações ou impressões">{ND}</span> : fmtInt(Math.round(q.expected))), sort: (q) => q.expected },
-    { id: 'v', label: 'Acima do esperado', num: true, render: (q) => { const v = xFor(q); return v === null ? <span className="nd">{ND}</span> : `${v >= 10 ? fmtInt(Math.round(v)) : v.toFixed(1).replace('.', ',')}×`; }, sort: (q) => xFor(q) },
-    { id: 'l', label: 'Link', render: (q) => <a className="link" href={q.post.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>abrir</a> },
-  ];
   return (
     <>
       <div className="well class-effort">
@@ -189,12 +178,6 @@ function OutlierDetail({ points, trends, focus, title }: { points: ScatterPoint[
         </div>
         <OutlierScatter points={shown} trends={trends} focus={focus} onOpen={setOpenPost} />
       </div>
-      <div className="class-stack">
-        <div className="well class-effort">
-          <h3>Maiores outliers de alto engajamento{sel !== 'all' ? ` · ${PLATFORM_BY_ID[sel].name}` : ''}<Info>Publicações fora do agrupamento e acima da tendência da sua rede, da mais distante para a menos distante. “Acima do esperado” = engajamento ÷ engajamento previsto pela tendência para a mesma base. Entram só os que também têm engajamento acima do típico da rede; os de engajamento baixo demais ficam de fora.</Info></h3>
-          {highs.length ? <DataTable key={`${title}-${sel}`} rows={highs} cols={cols} rowKey={(q) => q.post.id} onRowClick={(q) => setOpenPost(q.post)} pageSize={5} />
-            : <Empty>Nenhum outlier de alto engajamento neste recorte.</Empty>}
-        </div>
         <div className="well class-effort">
           <h3>Redes que mais produzem outliers<Info>Outliers de alto engajamento por rede, no nível aberto do mapa. Ao passar o mouse, a fatia das publicações da rede que são outliers. Não segue o filtro de rede do gráfico.</Info></h3>
           {byNet.length ? <HBars aria="Outliers de alto engajamento por rede" labelW={130} rows={byNet.map((r) => ({
@@ -203,7 +186,6 @@ function OutlierDetail({ points, trends, focus, title }: { points: ScatterPoint[
             active: sel === r.n, onClick: () => setNet(sel === r.n ? 'all' : r.n),
           }))} /> : <Empty>Nenhuma rede com outliers de alto engajamento.</Empty>}
         </div>
-      </div>
     </>
   );
 }

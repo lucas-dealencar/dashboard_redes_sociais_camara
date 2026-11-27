@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefCallback, type RefObject } from 'react';
 import { niceScale, heatColor, HEAT, SEQ } from './scale';
 import { downloadSvgPng } from '../../utils/export';
 import { PLATFORM_LOGO } from '../../data/logos';
@@ -8,17 +8,25 @@ const F = 'DM Sans, Arial, sans-serif';
 /** logotipo quando a chave do item é uma rede */
 const logoOf = (key: string): string | undefined => (PLATFORM_LOGO as Record<string, string>)[key];
 
-export function useWidth(): [RefObject<HTMLDivElement>, number] {
-  const ref = useRef<HTMLDivElement>(null);
+/**
+ * Largura do contêiner do gráfico. O ref é de callback: se o elemento for trocado (ex.: o gráfico
+ * some para dar lugar a uma mensagem e depois volta), a medição passa para o elemento novo.
+ */
+export function useWidth(): [RefCallback<HTMLDivElement> & RefObject<HTMLDivElement>, number] {
   const [w, setW] = useState(600);
-  useLayoutEffect(() => {
-    const el = ref.current;
+  const ro = useRef<ResizeObserver | null>(null);
+  const holder = useRef<HTMLDivElement | null>(null);
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    ro.current?.disconnect();
+    holder.current = el;
     if (!el) return;
-    setW(Math.max(240, el.clientWidth));
-    const ro = new ResizeObserver(() => setW(Math.max(240, el.clientWidth)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    const measure = () => { if (el.isConnected && el.clientWidth > 0) setW(Math.max(240, el.clientWidth)); };
+    measure();
+    ro.current = new ResizeObserver(measure);
+    ro.current.observe(el);
+  }, []) as RefCallback<HTMLDivElement> & RefObject<HTMLDivElement>;
+  Object.defineProperty(ref, 'current', { get: () => holder.current, configurable: true });
+  useEffect(() => () => ro.current?.disconnect(), []);
   return [ref, w];
 }
 
