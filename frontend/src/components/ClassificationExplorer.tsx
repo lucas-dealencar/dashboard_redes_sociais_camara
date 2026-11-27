@@ -1,12 +1,17 @@
-import { useMemo, useRef, useState } from 'react';
-import { groupClasses, OTHERS, squarify, subOf, typeOf, type ClassGroup, type ClassPick } from '../domain/classification';
-import { fmtCompact, fmtInt, fmtShare, ND } from '../domain/format';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FORMAT_BY_ID } from '../data/catalog';
+import { postEngagement } from '../domain/aggregate';
+import { fmtDMY } from '../domain/dates';
+import { groupClasses, matchesPick, OTHERS, squarify, subOf, typeOf, type ClassGroup, type ClassPick } from '../domain/classification';
+import { fmtCompact, fmtInt, fmtPct, fmtShare, ND } from '../domain/format';
+import { postMetric } from '../domain/contentStats';
+import { useStore } from '../state/store';
 import type { Post } from '../types';
 import type { Table } from '../utils/export';
 import { PngButton, useWidth } from './charts/charts';
 import { HEAT, heatColor } from './charts/scale';
 import { Info } from './ui/Info';
-import { Empty, ExportButtons, Panel, Section, Segmented, Well } from './ui/ui';
+import { DataTable, Empty, ExportButtons, Panel, PlatformBadge, Section, Segmented, Well, type Col } from './ui/ui';
 
 type Size = 'posts' | 'engagement';
 type Stat = 'media' | 'mediana';
@@ -104,6 +109,29 @@ function EffortReturn({ groups, stat, minN, picked, onPick }: { groups: ClassGro
   );
 }
 
+/** Publicações da classificação escolhida, da de maior para a de menor engajamento. */
+function TopPosts({ posts, title, showSub }: { posts: Post[]; title: string; showSub: boolean }) {
+  const { setOpenPost } = useStore();
+  const rows = useMemo(() => posts.filter((p) => postEngagement(p) !== null).sort((a, b) => (postEngagement(b) as number) - (postEngagement(a) as number)), [posts]);
+  const cols: Col<Post>[] = [
+    { id: 't', label: 'Publicação', render: (p) => <b>{p.title}</b> },
+    ...(showSub ? [{ id: 's', label: 'Subtipo', render: (p: Post) => subOf(p) }] : []),
+    { id: 'r', label: 'Rede', render: (p) => <PlatformBadge id={p.platform} /> },
+    { id: 'f', label: 'Formato', render: (p) => FORMAT_BY_ID[p.format].name },
+    { id: 'd', label: 'Data', render: (p) => fmtDMY(p.day), sort: (p) => p.day },
+    { id: 'e', label: 'Engajamento', num: true, render: (p) => fmtInt(postEngagement(p) as number), sort: (p) => postEngagement(p) },
+    { id: 'tx', label: 'Taxa', num: true, render: (p) => { const v = postMetric(p, 'er'); return v === null ? <span className="nd">{ND}</span> : <span title={`Base: ${p.metrics.erBase === 'reach' ? 'alcance' : p.metrics.erBase === 'impressions' ? 'impressões' : 'visualizações'}`}>{fmtPct(v, 2)}</span>; }, sort: (p) => postMetric(p, 'er') },
+    { id: 'l', label: 'Link', render: (p) => <a className="link" href={p.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>abrir</a> },
+  ];
+  return (
+    <div className="well class-effort">
+      <h3>Publicações com mais engajamento · {title}</h3>
+      {rows.length ? <DataTable key={title} rows={rows} cols={cols} rowKey={(p) => p.id} onRowClick={setOpenPost} pageSize={5} defaultSort="e" />
+        : <Empty>Nenhuma publicação com engajamento disponível nesta classificação.</Empty>}
+    </div>
+  );
+}
+
 interface Props {
   posts: Post[];
   minN: number;
@@ -127,6 +155,19 @@ export function ClassificationExplorer({ posts, minN, pick, onPick }: Props) {
     onPick({ type, sub: pick.sub === g.key ? null : g.key }, g.members);
   };
 
+  // detalhamento: o subtipo escolhido ou, sem ele, o tipo aberto
+  const sub = picked ? subs.find((g) => g.key === picked) ?? null : null;
+  const detail = useMemo(() => (type ? posts.filter((p) => matchesPick(p, { type, sub: sub?.key ?? null }, sub?.members ?? [])) : []), [posts, type, sub]);
+
+  // clique nas barras: leva a tela até o detalhamento, que fica abaixo delas
+  const detailRef = useRef<HTMLDivElement>(null);
+  const reveal = useRef(false);
+  useEffect(() => {
+    if (!reveal.current) return;
+    reveal.current = false;
+    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [pick.type, pick.sub]);
+
   const table = (): Table => ({
     name: 'classificacao',
     headers: ['Tipo de classificação', 'Subtipo de classificação', 'Publicações', 'Publicações com engajamento', 'Engajamento', 'Engajamento médio por publicação', 'Engajamento mediano por publicação'],
@@ -135,7 +176,7 @@ export function ClassificationExplorer({ posts, minN, pick, onPick }: Props) {
 
   const where = type ?? 'Todos os tipos';
   return (
-    <Section title="Mapa da classificação" sub="Clique em um tipo para abrir os subtipos; clique em um subtipo para filtrar o ranking de publicações">
+    <Section title="Mapa da classificação" sub="Clique em um tipo para abrir os subtipos e ver as publicações com mais engajamento; clique em um subtipo para detalhar só ele (o ranking de publicações acompanha)">
       <Panel title={type ? <><button type="button" className="crumb" onClick={() => onPick({ type: null, sub: null }, [])}>← Todos os tipos</button> {type}</> : 'Tipos de classificação'}
           tools={<><Segmented value={size} label="Tamanho dos blocos" options={[{ id: 'posts', label: 'Publicações' }, { id: 'engagement', label: 'Engajamento' }]} onChange={setSize} /><Segmented value={stat} label="Engajamento por publicação" options={[{ id: 'media', label: 'Média' }, { id: 'mediana', label: 'Mediana' }]} onChange={setStat} /><ExportButtons table={table} /><PngButton target={ref} name="mapa-classificacao" /></>}>
         {groups.length ? (
@@ -143,8 +184,9 @@ export function ClassificationExplorer({ posts, minN, pick, onPick }: Props) {
             <Well><div ref={ref}><Treemap aria={`Mapa de classificação: ${where}`} groups={groups} size={size} stat={stat} minN={minN} picked={picked} onPick={choose} /></div></Well>
             <div className="well class-effort">
               <h3>Esforço × retorno<Info>{stat === 'media' ? 'Compara a fatia das publicações com a fatia do engajamento somado.' : 'Mediana: o engajamento de cada grupo é estimado como mediana por publicação × número de publicações, e depois convertido em percentual. Assim, publicações fora da curva não distorcem a fatia.'} 2,0× = rende o dobro do volume que ocupa. Considera só publicações com engajamento disponível.</Info></h3>
-              <EffortReturn groups={groups} stat={stat} minN={minN} picked={picked} onPick={choose} />
+              <EffortReturn groups={groups} stat={stat} minN={minN} picked={picked} onPick={(g) => { reveal.current = true; choose(g); }} />
             </div>
+            {type && <div ref={detailRef}><TopPosts posts={detail} title={sub ? `${type} › ${sub.label}` : type} showSub={!sub || sub.key === OTHERS} /></div>}
           </div>
         ) : <Empty>Sem publicações para os filtros atuais.</Empty>}
       </Panel>
