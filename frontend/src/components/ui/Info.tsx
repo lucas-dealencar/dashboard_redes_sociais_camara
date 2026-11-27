@@ -11,7 +11,8 @@ export function Info({ children, label = 'Mais informações' }: { children: Rea
     setShift(0);
     if (!open || !tip.current) return;
     const r = tip.current.getBoundingClientRect(), w = document.documentElement.clientWidth;
-    setShift(r.right > w - 8 ? w - 8 - r.right : r.left < 8 ? 8 - r.left : 0);
+    const scale = tip.current.offsetWidth ? r.width / tip.current.offsetWidth : 1;
+    setShift((r.right > w - 8 ? w - 8 - r.right : r.left < 8 ? 8 - r.left : 0) / scale);
   }, [open]);
   useEffect(() => {
     if (!open) return;

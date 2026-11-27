@@ -22,7 +22,8 @@ export function StickyFilters() {
 
   useEffect(() => {
     let last = window.scrollY, moved = 0, top = 0;
-    const measure = () => { top = document.querySelector('.nav')?.getBoundingClientRect().height ?? 0; setNavH(top); };
+    // top em px de tela (compara com a âncora); navH em px do layout (vai para o estilo)
+    const measure = () => { const nav = document.querySelector<HTMLElement>('.nav'); top = nav?.getBoundingClientRect().height ?? 0; setNavH(nav?.offsetHeight ?? 0); };
     // com um seletor, lista ou data em uso, a rolagem não pode fechar a barra
     const busy = () => {
       const el = float.current;

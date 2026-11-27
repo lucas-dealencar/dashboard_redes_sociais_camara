@@ -34,7 +34,7 @@ export function SmallMultiples({ labels, rows, markers = [], selected, onSelect,
   const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - L - R) / 78))));
   const idxFromX = (clientX: number) => {
     const r = ref.current!.getBoundingClientRect();
-    return Math.max(0, Math.min(n - 1, Math.round(((clientX - r.left - L) / (W - L - R)) * (n - 1))));
+    return Math.max(0, Math.min(n - 1, Math.round((((clientX - r.left) * (W / (r.width || W)) - L) / (W - L - R)) * (n - 1))));
   };
   const active = hover ?? selected ?? null;
   return (

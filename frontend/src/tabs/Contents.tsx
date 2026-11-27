@@ -94,20 +94,17 @@ export function Contents() {
 
   return (
     <div className="stack">
-      <Panel light title="Recorte da análise" sub="Os filtros globais continuam valendo; aqui você escolhe a rede, a métrica e como agregar.">
-        <div className="f-row">
-          <div className="f-group"><span className="f-label">Rede</span><Select label="Rede da análise" value={net} options={[{ id: 'all', label: 'Todas as redes selecionadas' }, ...active.map((p) => ({ id: p as string, label: PLATFORM_BY_ID[p].name }))]} onChange={(v) => { setNetPick(v as never); setCell(null); }} /></div>
-          <div className="f-group"><span className="f-label">Métrica</span><Select label="Métrica" value={metric} options={POST_METRICS.filter((m) => net !== 'all' || m.id !== 'kpi').map((m) => ({ id: m.id, label: m.label }))} onChange={setMetric} /></div>
-          <div className="f-group"><span className="f-label">Agregação</span><Segmented value={agg} label="Agregação" options={[{ id: 'media', label: 'Média' }, { id: 'mediana', label: 'Mediana' }, { id: 'total', label: metric === 'er' ? 'Taxa agregada' : 'Total' }]} onChange={setAgg} /></div>
-          <div className="f-group"><span className="f-label">Amostra mínima (n)</span><Select label="Amostra mínima" value={minN} options={[1, 3, 5, 10].map((n) => ({ id: n, label: `n ≥ ${n}` }))} onChange={setMinN} /></div>
-        </div>
-        <p className="small muted" style={{ marginTop: 10 }}>{fmtInt(posts.length)} publicações no recorte · {fmtInt(coverage)} com a métrica “{mdef.label}” disponível{coverage < posts.length ? ` (${fmtInt(posts.length - coverage)} em redes que não a fornecem, fora da conta)` : ''} · {mdef.label} {agg === 'media' ? 'médio' : agg === 'mediana' ? 'mediano' : 'total'}: <b>{fmtMetric(totalAgg.value, metric)}</b></p>
-      </Panel>
-
       <ClassificationExplorer posts={posts} minN={minN} pick={classPick} onPick={(pick, others) => setClassPick({ ...pick, others })} />
 
       <Section title="Matriz de desempenho por tema e formato" sub="Clique em uma célula para ver os conteúdos que compõem o resultado">
         <Panel title={`${net === 'all' ? 'Redes selecionadas' : PLATFORM_BY_ID[net].name} · ${mdef.label}${agg === 'media' ? ' médio' : agg === 'mediana' ? ' mediano' : ''} por publicação`} tools={<ExportButtons table={exportMatrix} />}>
+          <div className="f-row">
+            <div className="f-group"><span className="f-label">Rede</span><Select label="Rede da análise" value={net} options={[{ id: 'all', label: 'Todas as redes selecionadas' }, ...active.map((p) => ({ id: p as string, label: PLATFORM_BY_ID[p].name }))]} onChange={(v) => { setNetPick(v as never); setCell(null); }} /></div>
+            <div className="f-group"><span className="f-label">Métrica</span><Select label="Métrica" value={metric} options={POST_METRICS.filter((m) => net !== 'all' || m.id !== 'kpi').map((m) => ({ id: m.id, label: m.label }))} onChange={setMetric} /></div>
+            <div className="f-group"><span className="f-label">Agregação</span><Segmented value={agg} label="Agregação" options={[{ id: 'media', label: 'Média' }, { id: 'mediana', label: 'Mediana' }, { id: 'total', label: metric === 'er' ? 'Taxa agregada' : 'Total' }]} onChange={setAgg} /></div>
+            <div className="f-group"><span className="f-label">Amostra mínima (n)</span><Select label="Amostra mínima" value={minN} options={[1, 3, 5, 10].map((n) => ({ id: n, label: `n ≥ ${n}` }))} onChange={setMinN} /></div>
+          </div>
+          <p className="small muted" style={{ margin: '10px 0 14px' }}>{fmtInt(posts.length)} publicações no recorte · {fmtInt(coverage)} com a métrica “{mdef.label}” disponível{coverage < posts.length ? ` (${fmtInt(posts.length - coverage)} em redes que não a fornecem, fora da conta)` : ''} · {mdef.label} {agg === 'media' ? 'médio' : agg === 'mediana' ? 'mediano' : 'total'}: <b>{fmtMetric(totalAgg.value, metric)}</b></p>
           {themes.length && formats.length ? (
             <>
               <HeatTable rows={themes.map((t) => ({ key: t.id, label: t.name }))} cols={formats.map((f) => ({ key: f.id, label: f.name }))} minN={minN} selected={cell}

@@ -74,7 +74,7 @@ export function LineChart({ labels, series, compare, fmt, height = 250, peaks = 
   const tickEvery = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - L - R) / 78))));
   const idxFromX = (clientX: number) => {
     const r = ref.current!.getBoundingClientRect();
-    const px = clientX - r.left;
+    const px = (clientX - r.left) * (W / (r.width || W));
     return Math.max(0, Math.min(n - 1, Math.round(((px - L) / (W - L - R)) * (n - 1))));
   };
   const hi2 = hover ?? selected ?? null;
