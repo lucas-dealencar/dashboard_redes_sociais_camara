@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FORMATS, PLATFORMS, PLATFORM_BY_ID } from '../data/catalog';
 import { ADHERENCE, DICTIONARY } from '../domain/dictionary';
 import { hasContentFilter } from '../domain/aggregate';
@@ -99,11 +99,10 @@ export function FilterBar() {
   const { sel, range, preset, benchDays } = state;
   const mobile = useIsMobile();
   const [more, setMore] = useState(false);
-  const profOpts = useMemo(() => ds.profiles.filter((p) => !sel.platforms.length || sel.platforms.includes(p.platform)).map((p) => ({ id: p.id, label: p.name, group: PLATFORM_BY_ID[p.platform].name })), [ds.profiles, sel.platforms]);
   const content = hasContentFilter(sel);
   const formatOpts = FORMATS.filter((f) => PLATFORMS.some((p) => p.formats.includes(f.id)));
   const benchOpts = ds.meta.benchAlternatives.length ? ds.meta.benchAlternatives : [30, 60, 90, 180];
-  const active = sel.profileIds.length + sel.themeIds.length + sel.formats.length + (sel.paid !== 'all' ? 1 : 0) + (preset === 'custom' ? 1 : 0);
+  const active = sel.themeIds.length + sel.formats.length + (sel.paid !== 'all' ? 1 : 0) + (preset === 'custom' ? 1 : 0);
   const setDate = (which: 'start' | 'end', iso: string) => {
     if (!iso) return;
     const d = Math.min(LAST_DAY, Math.max(0, dayOf(iso)));
@@ -137,10 +136,6 @@ export function FilterBar() {
             </div>
           </div>
           <div className="f-group">
-            <span className="f-label">Perfil</span>
-            <MultiSelect label="Perfil" options={profOpts} value={sel.profileIds} onChange={(v) => setSel({ profileIds: v })} allLabel="Todos os perfis" />
-          </div>
-          <div className="f-group">
             <span className="f-label">Tema</span>
             <MultiSelect label="Tema" options={ds.themes.map((t) => ({ id: t.id, label: t.name }))} value={sel.themeIds} onChange={(v) => setSel({ themeIds: v })} allLabel="Todos os temas" />
           </div>
@@ -161,7 +156,7 @@ export function FilterBar() {
           {mobile && <button className="btn f-clear" onClick={resetFilters}>Limpar filtros</button>}
         </div>
       )}
-      {content && <Note>Tema e formato filtram <b>métricas de publicação</b>. Seguidores, novos seguidores e perdas são dados da conta e respondem apenas a plataforma e perfil.</Note>}
+      {content && <Note>Tema e formato filtram <b>métricas de publicação</b>. Seguidores, novos seguidores e perdas são dados da conta e respondem apenas à rede.</Note>}
     </section>
   );
 }

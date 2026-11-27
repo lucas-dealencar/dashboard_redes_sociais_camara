@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { groupClasses, median, OTHERS, squarify, subOf, typeOf, type ClassGroup, type ClassPick } from '../domain/classification';
+import { groupClasses, OTHERS, squarify, subOf, typeOf, type ClassGroup, type ClassPick } from '../domain/classification';
 import { fmtCompact, fmtInt, fmtShare, ND } from '../domain/format';
-import { postEngagement } from '../domain/aggregate';
 import type { Post } from '../types';
 import type { Table } from '../utils/export';
 import { PngButton, useWidth } from './charts/charts';
@@ -71,32 +70,32 @@ function Treemap({ groups, size, stat, minN, picked, onPick, aria }: { groups: C
 }
 
 /**
- * Esforço (% das publicações) frente a retorno, em barras espelhadas. Na média, o retorno é a fatia
- * do engajamento (razão = média do grupo ÷ média geral); na mediana, é a mediana por publicação
- * (razão = mediana do grupo ÷ `overall`, a mediana de todas as publicações do nível).
+ * Esforço (% das publicações) frente a retorno (% do engajamento), em barras espelhadas. Na média, o
+ * retorno é a fatia do engajamento somado. Na mediana, cada grupo pesa "mediana × publicações", o
+ * que tira o efeito das publicações fora da curva; as fatias continuam somando 100%.
  */
-function EffortReturn({ groups, stat, overall, minN, picked, onPick }: { groups: ClassGroup[]; stat: Stat; overall: number | null; minN: number; picked: string | null; onPick: (g: ClassGroup) => void }) {
+function EffortReturn({ groups, stat, minN, picked, onPick }: { groups: ClassGroup[]; stat: Stat; minN: number; picked: string | null; onPick: (g: ClassGroup) => void }) {
   const rows = groups.filter((g) => g.withEngagement > 0);
   const byMedian = stat === 'mediana';
-  const maxShare = Math.max(1e-9, ...rows.flatMap((g) => (byMedian ? [g.sharePosts] : [g.sharePosts, g.shareEngagement])));
-  const maxReturn = byMedian ? Math.max(1e-9, ...rows.map((g) => g.medianPerPost ?? 0)) : maxShare;
+  const typical = (g: ClassGroup) => (g.medianPerPost ?? 0) * g.withEngagement;
+  const totalTypical = rows.reduce((t, g) => t + typical(g), 0);
+  const returnOf = (g: ClassGroup) => (!byMedian ? g.shareEngagement : totalTypical ? typical(g) / totalTypical : 0);
+  const max = Math.max(1e-9, ...rows.flatMap((g) => [g.sharePosts, returnOf(g)]));
   if (!rows.length) return <Empty>Sem engajamento disponível para comparar neste recorte.</Empty>;
   return (
     <div className="effort">
-      <div className="effort-row effort-head"><span>% das publicações</span><span /><span>{byMedian ? 'Mediana de engajamento por publicação' : '% do engajamento'}</span><span /></div>
+      <div className="effort-row effort-head"><span>% das publicações</span><span /><span>{byMedian ? '% do engajamento (pela mediana)' : '% do engajamento'}</span><span /></div>
       {rows.map((g) => {
-        const ratio = byMedian
-          ? (overall && g.medianPerPost !== null ? g.medianPerPost / overall : null)
-          : (g.sharePosts ? g.shareEngagement / g.sharePosts : null);
-        const back = byMedian ? g.medianPerPost ?? 0 : g.shareEngagement;
+        const back = returnOf(g);
+        const ratio = g.sharePosts && (!byMedian || totalTypical) ? back / g.sharePosts : null;
         const small = g.withEngagement < minN;
         const cls = small || ratio === null ? 'flat' : ratio >= MANY ? 'up' : ratio <= FEW ? 'down' : 'flat';
         return (
           <button type="button" key={g.key} className={`effort-row${small ? ' small-n' : ''}`} aria-pressed={picked === g.key} onClick={() => onPick(g)}
             title={`${g.label}: ${fmtInt(g.withEngagement)} publicações com engajamento${small ? ' · amostra pequena' : ''}`}>
-            <span className="effort-side left"><b>{fmtShare(g.sharePosts * 100)}</b><i style={{ width: `${(g.sharePosts / maxShare) * 100}%` }} /></span>
+            <span className="effort-side left"><b>{fmtShare(g.sharePosts * 100)}</b><i style={{ width: `${(g.sharePosts / max) * 100}%` }} /></span>
             <span className="effort-name">{g.label}</span>
-            <span className="effort-side right"><i style={{ width: `${(back / maxReturn) * 100}%` }} /><b>{byMedian ? fmtCompact(back) : fmtShare(back * 100)}</b></span>
+            <span className="effort-side right"><i style={{ width: `${(back / max) * 100}%` }} /><b>{fmtShare(back * 100)}</b></span>
             <span className={`effort-ratio ${cls}`}>{ratio === null ? ND : `${ratio.toFixed(1).replace('.', ',')}×`}</span>
           </button>
         );
@@ -122,7 +121,6 @@ export function ClassificationExplorer({ posts, minN, pick, onPick }: Props) {
   const subs = useMemo(() => (type ? groupClasses(posts.filter((p) => typeOf(p) === type), subOf, true) : []), [posts, type]);
   const groups = type ? subs : types;
   const picked = type ? pick.sub : null;
-  const overall = useMemo(() => median((type ? posts.filter((p) => typeOf(p) === type) : posts).map(postEngagement).filter((e): e is number => e !== null)), [posts, type]);
 
   const choose = (g: ClassGroup) => {
     if (!type) return onPick({ type: g.key, sub: null }, []);
@@ -143,9 +141,9 @@ export function ClassificationExplorer({ posts, minN, pick, onPick }: Props) {
         {groups.length ? (
           <div className="class-stack">
             <Well><div ref={ref}><Treemap aria={`Mapa de classificação: ${where}`} groups={groups} size={size} stat={stat} minN={minN} picked={picked} onPick={choose} /></div></Well>
-            <div className="class-effort">
-              <h3>Esforço × retorno<Info>{stat === 'media' ? 'Compara a fatia das publicações com a fatia do engajamento. 2,0× = rende o dobro do volume que ocupa.' : `Compara a fatia das publicações com a mediana de engajamento por publicação. 2,0× = mediana igual ao dobro da mediana geral (${overall === null ? ND : fmtCompact(overall)}).`} Considera só publicações com engajamento disponível.</Info></h3>
-              <EffortReturn groups={groups} stat={stat} overall={overall} minN={minN} picked={picked} onPick={choose} />
+            <div className="well class-effort">
+              <h3>Esforço × retorno<Info>{stat === 'media' ? 'Compara a fatia das publicações com a fatia do engajamento somado.' : 'Mediana: o engajamento de cada grupo é estimado como mediana por publicação × número de publicações, e depois convertido em percentual. Assim, publicações fora da curva não distorcem a fatia.'} 2,0× = rende o dobro do volume que ocupa. Considera só publicações com engajamento disponível.</Info></h3>
+              <EffortReturn groups={groups} stat={stat} minN={minN} picked={picked} onPick={choose} />
             </div>
           </div>
         ) : <Empty>Sem publicações para os filtros atuais.</Empty>}

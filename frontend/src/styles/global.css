@@ -17,7 +17,7 @@ h1, h2, h3, h4, p { margin: 0; }
 
 /* ---------- capa ---------- */
 .cover { background: var(--cover); color: #fff; position: relative; overflow: hidden; border-bottom: 3px solid var(--mint); }
-.cover::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: min(40%, 576px); background: url('../assets/predio.png') right center / cover no-repeat; opacity: .9; pointer-events: none; }
+.cover::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: min(40%, 576px); background: url('../assets/predio.png') right bottom / contain no-repeat; opacity: .9; pointer-events: none; }
 .cover-in { position: relative; z-index: 1; padding: 34px 0 30px; display: grid; gap: 14px; }
 .selo { display: inline-block; justify-self: start; background: var(--mint-2); color: var(--ink); font-family: var(--font-title); font-weight: 800; font-size: 18px; letter-spacing: .02em; line-height: 1; padding: 12px 34px 12px 24px; border-radius: 0 33px 0 33px; }
 .cover h1 { font-family: var(--font-title); font-weight: 800; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04em; line-height: 1.05; }
