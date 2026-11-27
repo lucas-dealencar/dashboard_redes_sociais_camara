@@ -9,7 +9,7 @@ import { networkTrends, scatterPoints, type ScatterPoint, type Trend } from '../
 import { useStore } from '../state/store';
 import type { PlatformId, Post } from '../types';
 import type { Table } from '../utils/export';
-import { HBars, PngButton, useWidth } from './charts/charts';
+import { PngButton, useWidth } from './charts/charts';
 import { HEAT, heatColor } from './charts/scale';
 import { Info } from './ui/Info';
 import { DataTable, Empty, ExportButtons, Panel, PlatformBadge, Section, Segmented, Select, Well, type Col } from './ui/ui';
@@ -103,7 +103,6 @@ function EffortReturn({ groups, minN, picked, onPick }: { groups: ClassGroup[]; 
 /** Dispersão base × engajamento (log nos dois eixos); clicar numa bolinha abre a publicação. */
 function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoint[]; trends: Trend[]; focus: ((p: Post) => boolean) | null; onOpen: (p: Post) => void }) {
   const [ref, W] = useWidth();
-  const [hov, setHov] = useState<ScatterPoint | null>(null);
   const H = 360, L = 58, R = 14, TOP = 12, B = 42;
   const pts = points.filter((q) => q.base !== null);
   const lg = (v: number) => Math.log10(1 + v);
@@ -118,7 +117,7 @@ function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoin
   return (
     <div className="chart" ref={ref}>
       {!pts.length ? <Empty>Nenhuma publicação desta rede tem alcance, visualizações ou impressões; sem base, não há dispersão para desenhar (os outliers dela são avaliados só pelo engajamento).</Empty> : <>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="group" aria-label="Dispersão das publicações: base da taxa por engajamento" style={{ display: 'block', fontFamily: FONT }} onMouseLeave={() => setHov(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="group" aria-label="Dispersão das publicações: base da taxa por engajamento" style={{ display: 'block', fontFamily: FONT }}>
         {ticks(yMax).map((t) => <g key={`y${t}`}><line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke="#b5c9cc" strokeDasharray="3 4" /><text x={L - 8} y={py(t) + 4} textAnchor="end" fontSize={11} fill="#4f6b70">{fmtCompact(t)}</text></g>)}
         {ticks(xMax).map((t) => <g key={`x${t}`}><line x1={px(t)} x2={px(t)} y1={TOP} y2={H - B} stroke="#b5c9cc" strokeDasharray="3 4" /><text x={px(t)} y={H - B + 16} textAnchor="middle" fontSize={11} fill="#4f6b70">{fmtCompact(t)}</text></g>)}
         <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" fontSize={12} fontWeight={700} fill="#4f6b70">Base da taxa (alcance, visualizações ou impressões) · escala log</text>
@@ -135,9 +134,7 @@ function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoin
           return (
             <circle key={q.post.id} className="dot" cx={px(q.base as number)} cy={py(q.engagement)} r={q.outlier ? 5.5 : 4}
               fill={q.outlier ? '#fff' : c} fillOpacity={q.outlier ? 1 : 0.55} stroke={q.outlier ? '#c3423b' : c} strokeWidth={q.outlier ? 2.2 : 1}
-              opacity={dim ? 0.15 : 1} onMouseEnter={() => setHov(q)} onClick={() => onOpen(q.post)}>
-              <title>{tip(q)}</title>
-            </circle>
+              opacity={dim ? 0.15 : 1} aria-label={tip(q)} onClick={() => onOpen(q.post)} />
           );
         })}
         {trends.filter((t) => nets.includes(t.platform)).map((t) => {
@@ -146,7 +143,6 @@ function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoin
           return <line key={`tt-${t.platform}`} x1={ax} y1={ay} x2={bx} y2={by} stroke={PLATFORM_BY_ID[t.platform].color} strokeWidth={2.2} strokeDasharray="7 4" strokeLinecap="round"><title>{`Tendência de ${PLATFORM_BY_ID[t.platform].name}`}</title></line>;
         })}
       </svg>
-      {hov && <div className="tip" style={{ left: Math.min(px(hov.base as number) + 10, W - 290), top: Math.max(0, py(hov.engagement) - 60) }}>{tip(hov)}<br /><small>Clique para abrir a publicação</small></div>}
       <div className="legend-scale" style={{ flexWrap: 'wrap' }}>
         {nets.map((n) => <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ background: PLATFORM_BY_ID[n].color, borderRadius: '50%' }} />{PLATFORM_BY_ID[n].name}</span>)}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ background: '#fff', border: '2px solid #c3423b', borderRadius: '50%' }} />fora do agrupamento (outlier)</span>
@@ -157,18 +153,13 @@ function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoin
   );
 }
 
-/** Dispersão com filtro por rede e o subdetalhamento dos outliers de alto engajamento. */
+/** Dispersão das publicações com filtro por rede. */
 function OutlierDetail({ points, trends, focus, title }: { points: ScatterPoint[]; trends: Trend[]; focus: ((p: Post) => boolean) | null; title: string }) {
   const { setOpenPost } = useStore();
   const [net, setNet] = useState<'all' | PlatformId>('all');
   const nets = useMemo(() => [...new Set(points.map((q) => q.post.platform))] as PlatformId[], [points]);
   const shown = net !== 'all' && nets.includes(net) ? points.filter((q) => q.post.platform === net) : points;
   const sel = net !== 'all' && nets.includes(net) ? net : 'all';
-  const byNet = nets.map((n) => {
-    const all = points.filter((q) => q.post.platform === n);
-    const h = all.filter((q) => q.high).length;
-    return { n, h, total: all.length };
-  }).filter((r) => r.h > 0).sort((a, b) => b.h - a.h || b.h / b.total - a.h / a.total);
   return (
     <>
       <div className="well class-effort">
@@ -178,14 +169,6 @@ function OutlierDetail({ points, trends, focus, title }: { points: ScatterPoint[
         </div>
         <OutlierScatter points={shown} trends={trends} focus={focus} onOpen={setOpenPost} />
       </div>
-        <div className="well class-effort">
-          <h3>Redes que mais produzem outliers<Info>Outliers de alto engajamento por rede, no nível aberto do mapa. Ao passar o mouse, a fatia das publicações da rede que são outliers. Não segue o filtro de rede do gráfico.</Info></h3>
-          {byNet.length ? <HBars aria="Outliers de alto engajamento por rede" labelW={130} rows={byNet.map((r) => ({
-            key: r.n, label: PLATFORM_BY_ID[r.n].name, value: r.h, color: PLATFORM_BY_ID[r.n].color, text: fmtInt(r.h),
-            sub: `${fmtShare((r.h / r.total) * 100)} das publicações`, tip: `${PLATFORM_BY_ID[r.n].name}: ${fmtInt(r.h)} de ${fmtInt(r.total)} publicações com engajamento`,
-            active: sel === r.n, onClick: () => setNet(sel === r.n ? 'all' : r.n),
-          }))} /> : <Empty>Nenhuma rede com outliers de alto engajamento.</Empty>}
-        </div>
     </>
   );
 }
