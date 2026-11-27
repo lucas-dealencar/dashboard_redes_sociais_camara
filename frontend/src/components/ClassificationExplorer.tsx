@@ -266,8 +266,8 @@ export function ClassificationExplorer({ posts: all, minN, pick, onPick }: Props
                 <span className="fc-chev" aria-hidden>{showScatter ? '▴' : '▾'}</span> {showScatter ? 'Ocultar' : 'Ver'} a dispersão das publicações{levelOutliers > 0 ? ` · ${fmtInt(levelOutliers)} outliers` : ''}
               </button>
             </div>
-            {showScatter && <OutlierDetail points={levelPoints} trends={trends} focus={focus} title={sub ? `${type} › ${sub.label}` : where} />}
             {type && <div ref={detailRef}><TopPosts posts={detail} title={sub ? `${type} › ${sub.label}` : type} showSub={!sub || sub.key === OTHERS} /></div>}
+            {showScatter && <OutlierDetail points={levelPoints} trends={trends} focus={focus} title={sub ? `${type} › ${sub.label}` : where} />}
           </div>
         ) : <Empty>Sem publicações para os filtros atuais.</Empty>}
       </Panel>
