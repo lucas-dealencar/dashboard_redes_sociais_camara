@@ -5,17 +5,16 @@ import { fmtDMY } from '../domain/dates';
 import { groupClasses, matchesPick, OTHERS, squarify, subOf, typeOf, type ClassGroup, type ClassPick } from '../domain/classification';
 import { fmtCompact, fmtInt, fmtPct, fmtShare, ND } from '../domain/format';
 import { postMetric } from '../domain/contentStats';
-import { scatterPoints, type ScatterPoint } from '../domain/outliers';
+import { networkTrends, scatterPoints, type ScatterPoint, type Trend } from '../domain/outliers';
 import { useStore } from '../state/store';
 import type { PlatformId, Post } from '../types';
 import type { Table } from '../utils/export';
-import { PngButton, useWidth } from './charts/charts';
+import { HBars, PngButton, useWidth } from './charts/charts';
 import { HEAT, heatColor } from './charts/scale';
 import { Info } from './ui/Info';
-import { DataTable, Empty, ExportButtons, Panel, PlatformBadge, Section, Segmented, Well, type Col } from './ui/ui';
+import { DataTable, Empty, ExportButtons, Panel, PlatformBadge, Section, Segmented, Select, Well, type Col } from './ui/ui';
 
 type Size = 'posts' | 'engagement';
-type Outliers = 'com' | 'sem';
 
 const FONT = 'DM Sans, Arial, sans-serif';
 const MANY = 1.2, FEW = 0.8; // retorno ÷ esforço: acima rende mais que o volume; abaixo, menos
@@ -102,7 +101,7 @@ function EffortReturn({ groups, minN, picked, onPick }: { groups: ClassGroup[]; 
 }
 
 /** Dispersão base × engajamento (log nos dois eixos); clicar numa bolinha abre a publicação. */
-function OutlierScatter({ points, focus, onOpen }: { points: ScatterPoint[]; focus: ((p: Post) => boolean) | null; onOpen: (p: Post) => void }) {
+function OutlierScatter({ points, trends, focus, onOpen }: { points: ScatterPoint[]; trends: Trend[]; focus: ((p: Post) => boolean) | null; onOpen: (p: Post) => void }) {
   const [ref, W] = useWidth();
   const [hov, setHov] = useState<ScatterPoint | null>(null);
   const H = 360, L = 58, R = 14, TOP = 12, B = 42;
@@ -124,6 +123,12 @@ function OutlierScatter({ points, focus, onOpen }: { points: ScatterPoint[]; foc
         {ticks(xMax).map((t) => <g key={`x${t}`}><line x1={px(t)} x2={px(t)} y1={TOP} y2={H - B} stroke="#b5c9cc" strokeDasharray="3 4" /><text x={px(t)} y={H - B + 16} textAnchor="middle" fontSize={11} fill="#4f6b70">{fmtCompact(t)}</text></g>)}
         <text x={(L + W - R) / 2} y={H - 6} textAnchor="middle" fontSize={12} fontWeight={700} fill="#4f6b70">Base da taxa (alcance, visualizações ou impressões) · escala log</text>
         <text x={12} y={TOP + (H - TOP - B) / 2} textAnchor="middle" fontSize={12} fontWeight={700} fill="#4f6b70" transform={`rotate(-90 12 ${TOP + (H - TOP - B) / 2})`}>Engajamento · escala log</text>
+        {/* tendência de cada rede, no trecho de base que a rede cobre */}
+        {trends.filter((t) => nets.includes(t.platform)).map((t) => {
+          const at = (lx: number) => [L + (lx / xMax) * (W - L - R), TOP + (H - TOP - B) * (1 - Math.max(0, Math.min(yMax, t.a + t.b * lx)) / yMax)];
+          const [ax, ay] = at(t.x0), [bx, by] = at(t.x1);
+          return <line key={`t-${t.platform}`} x1={ax} y1={ay} x2={bx} y2={by} stroke="#07333a" strokeWidth={5} strokeOpacity={0.35} strokeLinecap="round" />;
+        })}
         {ordered.map((q) => {
           const c = PLATFORM_BY_ID[q.post.platform].color;
           const dim = focus && !focus(q.post);
@@ -135,13 +140,71 @@ function OutlierScatter({ points, focus, onOpen }: { points: ScatterPoint[]; foc
             </circle>
           );
         })}
+        {trends.filter((t) => nets.includes(t.platform)).map((t) => {
+          const at = (lx: number) => [L + (lx / xMax) * (W - L - R), TOP + (H - TOP - B) * (1 - Math.max(0, Math.min(yMax, t.a + t.b * lx)) / yMax)];
+          const [ax, ay] = at(t.x0), [bx, by] = at(t.x1);
+          return <line key={`tt-${t.platform}`} x1={ax} y1={ay} x2={bx} y2={by} stroke={PLATFORM_BY_ID[t.platform].color} strokeWidth={2.2} strokeDasharray="7 4" strokeLinecap="round"><title>{`Tendência de ${PLATFORM_BY_ID[t.platform].name}`}</title></line>;
+        })}
       </svg>
       {hov && <div className="tip" style={{ left: Math.min(px(hov.base as number) + 10, W - 290), top: Math.max(0, py(hov.engagement) - 60) }}>{tip(hov)}<br /><small>Clique para abrir a publicação</small></div>}
       <div className="legend-scale" style={{ flexWrap: 'wrap' }}>
         {nets.map((n) => <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ background: PLATFORM_BY_ID[n].color, borderRadius: '50%' }} />{PLATFORM_BY_ID[n].name}</span>)}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ background: '#fff', border: '2px solid #c3423b', borderRadius: '50%' }} />fora do agrupamento (outlier)</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 18, height: 0, borderTop: '2px dashed #48696f', borderRadius: 0 }} />tendência da rede</span>
       </div>
     </div>
+  );
+}
+
+/** Dispersão com filtro por rede e o subdetalhamento dos outliers de alto engajamento. */
+function OutlierDetail({ points, trends, focus, title }: { points: ScatterPoint[]; trends: Trend[]; focus: ((p: Post) => boolean) | null; title: string }) {
+  const { setOpenPost } = useStore();
+  const [net, setNet] = useState<'all' | PlatformId>('all');
+  const nets = useMemo(() => [...new Set(points.map((q) => q.post.platform))] as PlatformId[], [points]);
+  const shown = net !== 'all' && nets.includes(net) ? points.filter((q) => q.post.platform === net) : points;
+  const sel = net !== 'all' && nets.includes(net) ? net : 'all';
+  // só os outliers acima da tendência: os que têm engajamento alto demais para a sua base
+  const highs = useMemo(() => shown.filter((q) => q.high).sort((a, b) => b.distance - a.distance), [shown]);
+  const byNet = nets.map((n) => {
+    const all = points.filter((q) => q.post.platform === n);
+    const h = all.filter((q) => q.high).length;
+    return { n, h, total: all.length };
+  }).filter((r) => r.h > 0).sort((a, b) => b.h - a.h || b.h / b.total - a.h / a.total);
+  const xFor = (q: ScatterPoint) => (q.expected ? q.engagement / Math.max(1, q.expected) : null);
+  const cols: Col<ScatterPoint>[] = [
+    { id: 't', label: 'Publicação', render: (q) => <span><b>{q.post.title}</b><br /><small className="muted">{typeOf(q.post)} › {subOf(q.post)}</small></span> },
+    { id: 'r', label: 'Rede', render: (q) => <PlatformBadge id={q.post.platform} /> },
+    { id: 'd', label: 'Data', render: (q) => fmtDMY(q.post.day), sort: (q) => q.post.day },
+    { id: 'e', label: 'Engajamento', num: true, render: (q) => fmtInt(q.engagement), sort: (q) => q.engagement },
+    { id: 'x', label: 'Esperado pela tendência', num: true, render: (q) => (q.expected === null ? <span className="nd" title="Sem alcance, visualizações ou impressões">{ND}</span> : fmtInt(Math.round(q.expected))), sort: (q) => q.expected },
+    { id: 'v', label: 'Acima do esperado', num: true, render: (q) => { const v = xFor(q); return v === null ? <span className="nd">{ND}</span> : `${v >= 10 ? fmtInt(Math.round(v)) : v.toFixed(1).replace('.', ',')}×`; }, sort: (q) => xFor(q) },
+    { id: 'l', label: 'Link', render: (q) => <a className="link" href={q.post.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>abrir</a> },
+  ];
+  return (
+    <>
+      <div className="well class-effort">
+        <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <h3 style={{ margin: 0 }}>Agrupamento das publicações · {title}<Info>Cada bolinha é uma publicação: base da taxa no eixo horizontal e engajamento no vertical, em escala logarítmica. Cada rede forma o seu agrupamento; é outlier a publicação muito distante do centro do agrupamento da sua rede (distância de Mahalanobis robusta, limite de 99,9%), considerando a relação entre base e engajamento. A linha tracejada é a tendência de cada rede (mínimos quadrados em escala log, sem os outliers). Publicações sem base são avaliadas só pelo engajamento e não aparecem no gráfico. Clique numa bolinha para abrir a publicação.</Info></h3>
+          <Select label="Rede do agrupamento" value={sel} options={[{ id: 'all', label: 'Todas as redes' }, ...nets.map((n) => ({ id: n as string, label: PLATFORM_BY_ID[n].name }))]} onChange={(v) => setNet(v as never)} />
+        </div>
+        <OutlierScatter points={shown} trends={trends} focus={focus} onOpen={setOpenPost} />
+      </div>
+      <div className="class-stack">
+        <div className="well class-effort">
+          <h3>Maiores outliers de alto engajamento{sel !== 'all' ? ` · ${PLATFORM_BY_ID[sel].name}` : ''}<Info>Publicações fora do agrupamento e acima da tendência da sua rede, da mais distante para a menos distante. “Acima do esperado” = engajamento ÷ engajamento previsto pela tendência para a mesma base. Entram só os que também têm engajamento acima do típico da rede; os de engajamento baixo demais ficam de fora.</Info></h3>
+          {highs.length ? <DataTable key={`${title}-${sel}`} rows={highs} cols={cols} rowKey={(q) => q.post.id} onRowClick={(q) => setOpenPost(q.post)} pageSize={5} />
+            : <Empty>Nenhum outlier de alto engajamento neste recorte.</Empty>}
+        </div>
+        <div className="well class-effort">
+          <h3>Redes que mais produzem outliers<Info>Outliers de alto engajamento por rede, no nível aberto do mapa. Ao passar o mouse, a fatia das publicações da rede que são outliers. Não segue o filtro de rede do gráfico.</Info></h3>
+          {byNet.length ? <HBars aria="Outliers de alto engajamento por rede" labelW={130} rows={byNet.map((r) => ({
+            key: r.n, label: PLATFORM_BY_ID[r.n].name, value: r.h, color: PLATFORM_BY_ID[r.n].color, text: fmtInt(r.h),
+            sub: `${fmtShare((r.h / r.total) * 100)} das publicações`, tip: `${PLATFORM_BY_ID[r.n].name}: ${fmtInt(r.h)} de ${fmtInt(r.total)} publicações com engajamento`,
+            active: sel === r.n, onClick: () => setNet(sel === r.n ? 'all' : r.n),
+          }))} /> : <Empty>Nenhuma rede com outliers de alto engajamento.</Empty>}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -178,13 +241,13 @@ interface Props {
 
 export function ClassificationExplorer({ posts: all, minN, pick, onPick }: Props) {
   const [size, setSize] = useState<Size>('posts');
-  const [mode, setMode] = useState<Outliers>('com');
+  const [hideOutliers, setHideOutliers] = useState(false);
   const [showScatter, setShowScatter] = useState(false);
   const { setOpenPost } = useStore();
   // outliers avaliados no recorte inteiro, cada publicação contra o agrupamento da sua rede
   const points = useMemo(() => scatterPoints(all), [all]);
   const outlierIds = useMemo(() => new Set(points.filter((q) => q.outlier).map((q) => q.post.id)), [points]);
-  const posts = useMemo(() => (mode === 'sem' ? all.filter((p) => !outlierIds.has(p.id)) : all), [all, mode, outlierIds]);
+  const posts = useMemo(() => (hideOutliers ? all.filter((p) => !outlierIds.has(p.id)) : all), [all, hideOutliers, outlierIds]);
   const ref = useRef<HTMLDivElement>(null);
   const types = useMemo(() => groupClasses(posts, typeOf), [posts]);
   const type = pick.type && types.some((t) => t.key === pick.type) ? pick.type : null;
@@ -214,6 +277,7 @@ export function ClassificationExplorer({ posts: all, minN, pick, onPick }: Props
   const levelPoints = useMemo(() => (type ? points.filter((q) => typeOf(q.post) === type) : points), [points, type]);
   const focus = sub ? (p: Post) => matchesPick(p, { type, sub: sub.key }, sub.members) : null;
   const levelOutliers = levelPoints.filter((q) => q.outlier).length;
+  const trends = useMemo(() => networkTrends(points), [points]);
 
   const table = (): Table => ({
     name: 'classificacao',
@@ -225,24 +289,19 @@ export function ClassificationExplorer({ posts: all, minN, pick, onPick }: Props
   return (
     <Section title="Mapa da classificação" sub="Clique em um tipo para abrir os subtipos e ver as publicações com mais engajamento; clique em um subtipo para detalhar só ele (o ranking de publicações acompanha)">
       <Panel title={type ? <><button type="button" className="crumb" onClick={() => onPick({ type: null, sub: null }, [])}>← Todos os tipos</button> {type}</> : 'Tipos de classificação'}
-          tools={<><Segmented value={size} label="Tamanho dos blocos" options={[{ id: 'posts', label: 'Publicações' }, { id: 'engagement', label: 'Engajamento' }]} onChange={setSize} /><Segmented value={mode} label="Outliers" options={[{ id: 'com', label: 'Com outliers' }, { id: 'sem', label: `Sem outliers (${fmtInt(outlierIds.size)})` }]} onChange={setMode} /><ExportButtons table={table} /><PngButton target={ref} name="mapa-classificacao" /></>}>
+          tools={<><Segmented value={size} label="Tamanho dos blocos" options={[{ id: 'posts', label: 'Publicações' }, { id: 'engagement', label: 'Engajamento' }]} onChange={setSize} /><button type="button" role="switch" aria-checked={hideOutliers} className="switch" onClick={() => setHideOutliers((v) => !v)}><span className="switch-track" aria-hidden />Retirar outliers ({fmtInt(outlierIds.size)})</button><ExportButtons table={table} /><PngButton target={ref} name="mapa-classificacao" /></>}>
         {groups.length ? (
           <div className="class-stack">
             <Well><div ref={ref}><Treemap aria={`Mapa de classificação: ${where}`} groups={groups} size={size} minN={minN} picked={picked} onPick={choose} /></div></Well>
             <div className="well class-effort">
-              <h3>Esforço × retorno<Info>Compara a fatia das publicações com a fatia do engajamento somado. 2,0× = rende o dobro do volume que ocupa. Considera só publicações com engajamento disponível. Use “Sem outliers” para tirar as publicações fora do agrupamento da sua rede (veja a dispersão abaixo).</Info></h3>
+              <h3>Esforço × retorno<Info>Compara a fatia das publicações com a fatia do engajamento somado. 2,0× = rende o dobro do volume que ocupa. Considera só publicações com engajamento disponível. Ligue “Retirar outliers” para tirar as publicações fora do agrupamento da sua rede (veja a dispersão abaixo).</Info></h3>
               <EffortReturn groups={groups} minN={minN} picked={picked} onPick={(g) => { reveal.current = true; choose(g); }} />
-              {mode === 'sem' && outlierIds.size > 0 && <p className="small muted" style={{ marginTop: 8 }}>{fmtInt(outlierIds.size)} publicações fora do agrupamento da sua rede foram retiradas do mapa, do esforço × retorno e do detalhamento.</p>}
+              {hideOutliers && outlierIds.size > 0 && <p className="small muted" style={{ marginTop: 8 }}>{fmtInt(outlierIds.size)} publicações fora do agrupamento da sua rede foram retiradas do mapa, do esforço × retorno e do detalhamento.</p>}
               <button type="button" className="scatter-toggle" aria-expanded={showScatter} onClick={() => setShowScatter((v) => !v)}>
                 <span className="fc-chev" aria-hidden>{showScatter ? '▴' : '▾'}</span> {showScatter ? 'Ocultar' : 'Ver'} a dispersão das publicações{levelOutliers > 0 ? ` · ${fmtInt(levelOutliers)} outliers` : ''}
               </button>
             </div>
-            {showScatter && (
-              <div className="well class-effort">
-                <h3>Agrupamento das publicações · {sub ? `${type} › ${sub.label}` : where}<Info>Cada bolinha é uma publicação: base da taxa no eixo horizontal e engajamento no vertical, em escala logarítmica. Cada rede forma o seu agrupamento; é outlier a publicação muito distante do centro do agrupamento da sua rede (distância de Mahalanobis robusta, limite de 99,9%), considerando a relação entre base e engajamento. Publicações sem base são avaliadas só pelo engajamento e não aparecem no gráfico. Clique numa bolinha para abrir a publicação.</Info></h3>
-                <OutlierScatter points={levelPoints} focus={focus} onOpen={setOpenPost} />
-              </div>
-            )}
+            {showScatter && <OutlierDetail points={levelPoints} trends={trends} focus={focus} title={sub ? `${type} › ${sub.label}` : where} />}
             {type && <div ref={detailRef}><TopPosts posts={detail} title={sub ? `${type} › ${sub.label}` : type} showSub={!sub || sub.key === OTHERS} /></div>}
           </div>
         ) : <Empty>Sem publicações para os filtros atuais.</Empty>}

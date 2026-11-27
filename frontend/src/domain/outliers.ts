@@ -18,7 +18,37 @@ const LIMITE_2D = 13.82; // qui-quadrado com 2 g.l., 99,9%
 const LIMITE_1D = 10.83; // qui-quadrado com 1 g.l., 99,9%
 const MAD_MIN = 0.1; // em log10: evita escala zero quando quase todos os valores são iguais
 
-export interface ScatterPoint { post: Post; base: number | null; engagement: number; distance: number; outlier: boolean }
+export interface ScatterPoint {
+  post: Post; base: number | null; engagement: number; distance: number; outlier: boolean;
+  /** engajamento previsto pela tendência da rede para a base do post (null sem base ou sem tendência) */
+  expected: number | null;
+  /** outlier acima do agrupamento: engajamento maior que o esperado (ou, sem base, maior que o típico da rede) */
+  high: boolean;
+}
+
+/** Tendência da rede: log10(1 + engajamento) = a + b · log10(1 + base), por mínimos quadrados. */
+export interface Trend { platform: PlatformId; a: number; b: number; x0: number; x1: number; n: number }
+
+/** Reta de tendência por rede, ajustada na escala log dos dois eixos. */
+export function fitTrend(points: { base: number | null; engagement: number }[]): Omit<Trend, 'platform'> | null {
+  const xy = points.filter((q) => q.base !== null).map((q) => [lg(q.base as number), lg(q.engagement)] as const);
+  if (xy.length < MIN_POR_REDE) return null;
+  const mx = xy.reduce((s, [x]) => s + x, 0) / xy.length, my = xy.reduce((s, [, y]) => s + y, 0) / xy.length;
+  const sxx = xy.reduce((s, [x]) => s + (x - mx) ** 2, 0);
+  if (!sxx) return null;
+  const b = xy.reduce((s, [x, y]) => s + (x - mx) * (y - my), 0) / sxx;
+  return { a: my - b * mx, b, x0: Math.min(...xy.map(([x]) => x)), x1: Math.max(...xy.map(([x]) => x)), n: xy.length };
+}
+
+/** Tendência de cada rede, ajustada sem os outliers (a mesma usada em `expected`). */
+export function networkTrends(points: ScatterPoint[]): Trend[] {
+  const by = new Map<PlatformId, ScatterPoint[]>();
+  for (const q of points) if (!q.outlier) (by.get(q.post.platform) ?? by.set(q.post.platform, []).get(q.post.platform)!).push(q);
+  return [...by.entries()].flatMap(([platform, qs]) => { const t = fitTrend(qs); return t ? [{ platform, ...t }] : []; });
+}
+
+/** Engajamento previsto pela tendência para uma base. */
+export const predict = (t: { a: number; b: number }, base: number) => Math.max(0, 10 ** (t.a + t.b * lg(base)) - 1);
 
 /** Base da taxa da publicação (alcance, visualizações ou impressões), se houver. */
 export function postBase(p: Post): number | null {
@@ -57,6 +87,7 @@ export function scatterPoints(posts: Post[]): ScatterPoint[] {
       const sxy = pares.reduce((s, [a, b]) => s + a * b, 0), sxx = pares.reduce((s, [a]) => s + a * a, 0), syy = pares.reduce((s, [, b]) => s + b * b, 0);
       r = sxx && syy ? Math.max(-0.95, Math.min(0.95, sxy / Math.sqrt(sxx * syy))) : 0;
     }
+    const mine: ScatterPoint[] = [];
     ps.forEach((p, i) => {
       const zy = (ys[i] - Y.med) / Y.mad;
       const b = withBase[i];
@@ -66,8 +97,19 @@ export function scatterPoints(posts: Post[]): ScatterPoint[] {
         distance = (zx * zx - 2 * r * zx * zy + zy * zy) / (1 - r * r);
         limit = LIMITE_2D;
       } else { distance = zy * zy; limit = LIMITE_1D; }
-      out.push({ post: p, base: b, engagement: postEngagement(p) as number, distance, outlier: enough && distance > limit });
+      const outlier = enough && distance > limit;
+      // "alto engajamento" = acima do típico da rede; com base, também acima da tendência
+      mine.push({ post: p, base: b, engagement: postEngagement(p) as number, distance, outlier, expected: null, high: outlier && zy > 0 });
     });
+    // tendência do agrupamento: ajustada sem os outliers, para eles não puxarem a reta
+    const trend = fitTrend(mine.filter((q) => !q.outlier));
+    for (const q of mine) {
+      if (q.base !== null && trend) {
+        q.expected = predict(trend, q.base);
+        q.high = q.high && q.engagement > q.expected;
+      }
+      out.push(q);
+    }
   }
   return out;
 }
